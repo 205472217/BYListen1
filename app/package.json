@@ -1,0 +1,31 @@
+{
+  "name": "listen1",
+  "version": "2.33.0",
+  "description": "One for all free music in China",
+  "main": "main.js",
+  "scripts": {
+    "start": "electron main.js"
+  },
+  "repository": {
+    "type": "git",
+    "url": "git+https://github.com/listen1/listen1_desktop.git"
+  },
+  "keywords": [
+    "Electron",
+    "Listen 1",
+    "music player"
+  ],
+  "author": "Listen 1 <githublisten1@gmail.com>",
+  "license": "MIT",
+  "bugs": {
+    "url": "https://github.com/listen1/listen1_desktop/issues"
+  },
+  "homepage": "https://github.com/listen1/listen1_desktop#readme",
+  "dependencies": {
+    "@electron/remote": "^2.1.2",
+    "chardet": "^1.4.0",
+    "electron-store": "^8.0.1",
+    "electron-updater": "^5.0.1",
+    "music-metadata": "^7.12.3"
+  }
+}

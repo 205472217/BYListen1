@@ -13,6 +13,27 @@ const Store = require("electron-store");
 const { autoUpdater } = require("electron-updater");
 const remoteMain = require("@electron/remote/main");
 const { join } = require("path");
+const { existsSync, mkdirSync, appendFileSync } = require("fs");
+
+// simple per-day log file next to the executable
+function writeLog(type, message) {
+  try {
+    const pad = (n) => String(n).padStart(2, "0");
+    const d = new Date();
+    const dir = join(app.getPath("exe"), "..", "log");
+    const file = join(dir, `log-${d.getFullYear()}-${pad(d.getMonth() + 1)}-${pad(d.getDate())}.log`);
+    if (!existsSync(dir)) mkdirSync(dir, { recursive: true });
+    appendFileSync(file, `[${d.toISOString()}] [${type}] ${message}\n`, "utf8");
+  } catch (err) {
+    console.log("writeLog error:", err);
+  }
+}
+
+ipcMain.on("logLocalMusic", (event, arg) => {
+  if (arg && typeof arg.message === "string") {
+    writeLog(arg.type || "INFO", arg.message);
+  }
+});
 
 const store = new Store();
 const iconPath = join(__dirname, "/listen1_chrome_extension/images/logo.png");

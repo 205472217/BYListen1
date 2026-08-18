@@ -40,6 +40,7 @@
     <script type="text/javascript" src="js/vendor/hotkeys.min.js"></script>
     <script type="text/javascript" src="js/vendor/async.min.js"></script>
     <script type="text/javascript" src="js/vendor/lru-cache.min.js"></script>
+    <script type="text/javascript" src="js/vendor/zhConvert.js"></script>
 
     <script type="text/javascript" src="js/lowebutil.js"></script>
     <script type="text/javascript" src="js/github.js"></script>
@@ -3894,7 +3895,7 @@
                         <img
                       
                         id="trackbackground" 
-                          ng-src="{{ currentPlaying.img_url.replace('224y224','1024y1024').replace('/120/','/1024/').replace('/T002R300x300M','/T002R800x800M') }}?param=1024y1024"
+                          ng-src="{{ (currentPlaying.img_url || '').replace('224y224','1024y1024').replace('/120/','/1024/').replace('/T002R300x300M','/T002R800x800M') }}?param=1024y1024"
                           err-src="https://y.gtimg.cn/mediastyle/global/img/album_300.png"
                         />
                       </div>
@@ -4047,7 +4048,7 @@
                     
                       <!-- <img
                       play-pause-toggle=""
-                        ng-src="{{ currentPlaying.img_url.replace('/120/','/500/').replace('/T002R300x300M','/T002R500x500M')  }}?param=512y512"
+                        ng-src="{{ (currentPlaying.img_url || '').replace('/120/','/500/').replace('/T002R300x300M','/T002R500x500M')  }}?param=512y512"
                         err-src="https://y.gtimg.cn/mediastyle/global/img/album_300.png"
                       /> -->
                       <div id="rotatemark"

@@ -681,17 +681,28 @@ angular.module('listenone').controller('NavigationController', [
                   sound_url: `file://${fp}`,
                 };
 
-                const list_id = 'lmplaylist_reserve';
-                MediaService.addPlaylist(list_id, [track]).success((res) => {
-                  const { playlist } = res;
-                  $scope.songs = playlist.tracks;
-                  $scope.list_id = playlist.info.id;
-                  $scope.cover_img_url = playlist.info.cover_img_url;
-                  $scope.playlist_title = playlist.info.title;
-                  $scope.playlist_source_url = playlist.info.source_url;
-                  $scope.is_mine = playlist.info.id.slice(0, 2) === 'my';
-                  $scope.is_local = playlist.info.id.slice(0, 2) === 'lm';
-                  $scope.$evalAsync();
+                // try to fill missing album cover and lyric from the internet
+                localmusic.lm_fetch_online(track).then((online) => {
+                  if (online.img_url) {
+                    track.img_url = online.img_url;
+                  }
+                  if (online.lyric && !track.lyrics) {
+                    track.lyrics = [online.lyric];
+                    if (online.tlyric) track.tlyric = online.tlyric;
+                  }
+
+                  const list_id = 'lmplaylist_reserve';
+                  MediaService.addPlaylist(list_id, [track]).success((res) => {
+                    const { playlist } = res;
+                    $scope.songs = playlist.tracks;
+                    $scope.list_id = playlist.info.id;
+                    $scope.cover_img_url = playlist.info.cover_img_url;
+                    $scope.playlist_title = playlist.info.title;
+                    $scope.playlist_source_url = playlist.info.source_url;
+                    $scope.is_mine = playlist.info.id.slice(0, 2) === 'my';
+                    $scope.is_local = playlist.info.id.slice(0, 2) === 'lm';
+                    $scope.$evalAsync();
+                  });
                 });
               });
             });

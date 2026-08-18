@@ -611,6 +611,30 @@ angular.module('listenone').controller('PlayController', [
 
           case 'LOAD': {
             $scope.currentPlaying = msg.data.currentPlaying;
+            if (
+              msg.data.currentPlaying.id !== undefined &&
+              !msg.data.currentPlaying.img_url &&
+              (msg.data.currentPlaying.platform === 'localmusic' ||
+                msg.data.currentPlaying.source === 'localmusic')
+            ) {
+              const storedPlaylist =
+                localStorage.getObject('lmplaylist_reserve') || {};
+              const stored = (storedPlaylist.tracks || []).find(
+                (t) => t.id === msg.data.currentPlaying.id
+              );
+              if (stored && stored.img_url) {
+                msg.data.currentPlaying.img_url = stored.img_url;
+              } else {
+                window.localmusic.lm_fetch_cover(msg.data.currentPlaying).then(
+                  (img) => {
+                    if (img) {
+                      msg.data.currentPlaying.img_url = img;
+                      $scope.$evalAsync();
+                    }
+                  }
+                );
+              }
+            }
             const { length, index } = msg.data.playlist;
 
             if (useModernTheme()) {

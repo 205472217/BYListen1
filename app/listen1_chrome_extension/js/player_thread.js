@@ -52,6 +52,23 @@
     insertAudio(audio, idx) {
       if (this.playlist.find((i) => audio.id === i.id)) return;
 
+      // local music: restore the cover synchronously from the persisted playlist,
+      // so currentAudio/img_url is never blank on first render or at onplay
+      if (
+        !audio.img_url &&
+        (audio.platform === 'localmusic' || audio.source === 'localmusic')
+      ) {
+        try {
+          const raw = window.localStorage.getItem('lmplaylist_reserve');
+          const data = raw ? JSON.parse(raw) : null;
+          const stored =
+            data && data.tracks && data.tracks.find((t) => t.id === audio.id);
+          if (stored && stored.img_url) audio = { ...audio, img_url: stored.img_url };
+        } catch (e) {
+          /* ignore */
+        }
+      }
+
       const audioData = {
         ...audio,
         disabled: false, // avoid first time load block

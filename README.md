@@ -22,16 +22,6 @@ Listen 1 可以搜索和播放来自多个主流音乐网站的歌曲，让你�
 
 网址：https://listen1.github.io/listen1
 
-## 生成完整代码
-
-项目中包含了 listen1_chrome_extension 的引用，在 checkout 后需要把引用库初始化
-
-    git submodule update --init --recursive
-
-## 运行
-
-    npm run start
-
 ## 生成安装包
 
 全平台安装包
@@ -40,8 +30,7 @@ Listen 1 可以搜索和播放来自多个主流音乐网站的歌曲，让你�
 
 Windows 安装包
 
-    npm run dist:win32
-    npm run dist:win64
+    双击 build_win_x64.bat
 
 Mac 安装包
 

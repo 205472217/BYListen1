@@ -61,6 +61,18 @@ angular.module('listenone').controller('NavigationController', [
       $scope.showTag(3);
     });
 
+    // refresh the local-music banner cover when a cover arrives late during playback
+    $scope.$on('lmcover:updated', (event, img_url) => {
+      if (!$scope.is_local || !img_url) {
+        return;
+      }
+      if ($scope.cover_img_url !== img_url) {
+        $scope.$evalAsync(() => {
+          $scope.cover_img_url = img_url;
+        });
+      }
+    });
+
     // playlist window
     $scope.resetWindow = (offset) => {
       if (offset === undefined) {

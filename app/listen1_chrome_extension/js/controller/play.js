@@ -611,30 +611,6 @@ angular.module('listenone').controller('PlayController', [
 
           case 'LOAD': {
             $scope.currentPlaying = msg.data.currentPlaying;
-            if (
-              msg.data.currentPlaying.id !== undefined &&
-              !msg.data.currentPlaying.img_url &&
-              (msg.data.currentPlaying.platform === 'localmusic' ||
-                msg.data.currentPlaying.source === 'localmusic')
-            ) {
-              const storedPlaylist =
-                localStorage.getObject('lmplaylist_reserve') || {};
-              const stored = (storedPlaylist.tracks || []).find(
-                (t) => t.id === msg.data.currentPlaying.id
-              );
-              if (stored && stored.img_url) {
-                msg.data.currentPlaying.img_url = stored.img_url;
-              } else {
-                window.localmusic.lm_fetch_cover(msg.data.currentPlaying).then(
-                  (img) => {
-                    if (img) {
-                      msg.data.currentPlaying.img_url = img;
-                      $scope.$evalAsync();
-                    }
-                  }
-                );
-              }
-            }
             const { length, index } = msg.data.playlist;
 
             if (useModernTheme()) {
@@ -690,7 +666,21 @@ angular.module('listenone').controller('PlayController', [
               track.lyric_url,
               track.tlyric_url
             ).success((res) => {
-              const { lyric, tlyric } = res;
+              const { lyric, tlyric, img_url } = res;
+              // refresh the live now-playing cover when a cover arrives late
+              // (e.g. local music online search), but only for the current track
+              if (
+                img_url &&
+                $scope.currentPlaying &&
+                $scope.currentPlaying.id === track.id &&
+                $scope.currentPlaying.img_url !== img_url
+              ) {
+                $scope.$evalAsync(() => {
+                  $scope.currentPlaying.img_url = img_url;
+                });
+                // let the local-music list page refresh its banner cover
+                $rootScope.$broadcast('lmcover:updated', img_url);
+              }
               if (!lyric) {
                 return;
               }

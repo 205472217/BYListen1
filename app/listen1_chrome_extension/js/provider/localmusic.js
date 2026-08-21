@@ -259,6 +259,17 @@ class localmusic {
     ]).then(([img_url, lyric]) => ({ img_url, lyric, tlyric: '' }));
   }
 
+  // keep the local playlist banner cover in sync once a real cover is known
+  static lm_update_playlist_cover(playlist, img_url) {
+    if (!img_url || !playlist || !playlist.info) {
+      return;
+    }
+    const cur = playlist.info.cover_img_url;
+    if (!cur || cur === 'images/mycover.jpg') {
+      playlist.info.cover_img_url = img_url;
+    }
+  }
+
   static lyric(url) {
     const track_id = getParameterByName('track_id', url);
     const playlist = localStorage.getObject('lmplaylist_reserve');
@@ -270,39 +281,30 @@ class localmusic {
         if (track.lyrics !== undefined) {
           [lyric] = track.lyrics;
         }
-        if (lyric) {
-          if (!track.img_url) {
-            // embedded lyric exists but cover is missing: fetch it online too
-            localmusic.lm_fetch_cover(track).then((img) => {
-              if (img) {
-                track.img_url = img;
-                localStorage.setObject('lmplaylist_reserve', playlist);
-                return fn({
-                  lyric,
-                  tlyric: track.tlyric || '',
-                  img_url: img,
-                });
-              }
-              return fn({ lyric, tlyric: track.tlyric || '', img_url: '' });
-            });
-            return;
-          }
-          return fn({ lyric, tlyric: track.tlyric || '', img_url: track.img_url });
+        // both lyric and cover already present: nothing to fetch
+        if (lyric && track.img_url) {
+          return fn({
+            lyric,
+            tlyric: track.tlyric || '',
+            img_url: track.img_url || '',
+          });
         }
-        // otherwise try to fetch online and cache it back into the playlist
+        // otherwise fetch the missing piece(s) online and cache them back,
+        // so a song that has a local lyric but no cover still gets its cover
         localmusic.lm_fetch_online(track).then((online) => {
-          if (online.lyric) {
+          if (online.lyric && !lyric) {
             track.lyrics = [online.lyric];
             if (online.tlyric) track.tlyric = online.tlyric;
           }
-          if (!track.img_url && online.img_url) {
+          if (online.img_url && !track.img_url) {
             track.img_url = online.img_url;
           }
+          localmusic.lm_update_playlist_cover(playlist, track.img_url);
           localStorage.setObject('lmplaylist_reserve', playlist);
           // img_url is returned too, so the live now-playing cover can be refreshed
           fn({
-            lyric: online.lyric,
-            tlyric: online.tlyric || '',
+            lyric: lyric || online.lyric || '',
+            tlyric: track.tlyric || online.tlyric || '',
             img_url: track.img_url || online.img_url || '',
           });
         });
@@ -325,6 +327,10 @@ class localmusic {
     playlist.tracks = tracks.concat(
       playlist.tracks.filter((tr) => tracksIdSet[tr.id] !== true)
     );
+    // refresh the banner cover from the first track that has a real one
+    playlist.tracks.forEach((tr) => {
+      localmusic.lm_update_playlist_cover(playlist, tr.img_url);
+    });
     localStorage.setObject(list_id, playlist);
 
     return {

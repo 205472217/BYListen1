@@ -11,6 +11,16 @@ const defaultLocalMusicPlaylist = {
   },
 };
 
+const localLyricSources = [
+  { index: 0, name: 'Rangotec' },
+  { index: 1, name: 'LrcApi' },
+  { index: 2, name: 'LRCLIB' },
+  { index: 3, name: 'XMS' },
+];
+const localLyricEmptyMessage = '当前源未搜索到歌词，请切换搜索源';
+const localLyricRequestVersions = {};
+const localLyricSelectionVersions = {};
+
 class localmusic {
   static show_playlist(url, hm) {
     return {
@@ -98,8 +108,34 @@ class localmusic {
     console.log(full);
   }
 
-  // lyric: LRCLIB first, LrcApi as fallback
-  static lm_fetch_lyric(title, artist) {
+  static lm_get_lyric_sources() {
+    return localLyricSources.map((source) => ({ ...source }));
+  }
+
+  static lm_create_lyric_cache() {
+    return {
+      selected_index: 0,
+      selected_name: localLyricSources[0].name,
+      sources: localLyricSources.map((source) => ({
+        ...source,
+        status: 'unsearched',
+        lyric: '',
+      })),
+    };
+  }
+
+  static lm_get_lyric_source(index) {
+    return localLyricSources.find((source) => source.index === index);
+  }
+
+  static lm_empty_lyric_result(status) {
+    return {
+      status,
+      lyric: localLyricEmptyMessage,
+    };
+  }
+
+  static lm_fetch_lyric_lrclib(title, artist) {
     const lrclibUrl = `https://lrclib.net/api/search?track_name=${encodeURIComponent(
       title
     )}&artist_name=${encodeURIComponent(artist || '')}`;
@@ -116,17 +152,17 @@ class localmusic {
             'LYRIC',
             `success ${lrclibUrl} len=${item.syncedLyric.length}`
           );
-          return item.syncedLyric;
+          return { status: 'success', lyric: item.syncedLyric };
         }
-        this.lm_log('LYRIC', `empty ${lrclibUrl}, try LrcApi`);
-        return this.lm_fetch_lyric_lrcapi(title, artist);
+        this.lm_log('LYRIC', `empty ${lrclibUrl}`);
+        return this.lm_empty_lyric_result('empty');
       })
       .catch((err) => {
         this.lm_log(
           'LYRIC',
-          `fail ${lrclibUrl} ${err && err.message ? err.message : err}, try LrcApi`
+          `fail ${lrclibUrl} ${err && err.message ? err.message : err}`
         );
-        return this.lm_fetch_lyric_lrcapi(title, artist);
+        return this.lm_empty_lyric_result('error');
       });
   }
 
@@ -140,18 +176,99 @@ class localmusic {
       .then((resp) => {
         if (typeof resp.data === 'string' && resp.data) {
           this.lm_log('LYRIC', `success ${url} len=${resp.data.length}`);
-          return resp.data;
+          return { status: 'success', lyric: resp.data };
         }
         this.lm_log('LYRIC', `empty ${url}`);
-        return '';
+        return this.lm_empty_lyric_result('empty');
       })
       .catch((err) => {
         this.lm_log(
           'LYRIC',
           `fail ${url} ${err && err.message ? err.message : err}`
         );
-        return '';
+        return this.lm_empty_lyric_result('error');
       });
+  }
+
+  static lm_fetch_lyric_xms(title, artist) {
+    const url = `https://lrc.xms.mx/lyrics?title=${encodeURIComponent(
+      title
+    )}&artist=${encodeURIComponent(artist || '')}`;
+    this.lm_log('LYRIC', `GET ${url}`);
+    return axios
+      .get(url)
+      .then((resp) => {
+        if (typeof resp.data === 'string' && resp.data) {
+          this.lm_log('LYRIC', `success ${url} len=${resp.data.length}`);
+          return { status: 'success', lyric: resp.data };
+        }
+        this.lm_log('LYRIC', `empty ${url}`);
+        return this.lm_empty_lyric_result('empty');
+      })
+      .catch((err) => {
+        this.lm_log(
+          'LYRIC',
+          `fail ${url} ${err && err.message ? err.message : err}`
+        );
+        return this.lm_empty_lyric_result('error');
+      });
+  }
+
+  static lm_normalize_rangotec_lyric(lyric) {
+    return lyric
+      .split(/\r?\n/)
+      .map((line) =>
+        line.replace(
+          /^\[(\d+):(\d{2}):(\d{3}),\d+:\d{2}:\d{3}\]/,
+          '[$1:$2.$3]'
+        )
+      )
+      .join('\n');
+  }
+
+  static lm_fetch_lyric_rangotec(title, artist) {
+    const url = `https://tools.rangotec.com/api/anon/lrc?title=${encodeURIComponent(
+      title
+    )}&artist=${encodeURIComponent(artist || '')}`;
+    this.lm_log('LYRIC', `GET ${url}`);
+    return axios
+      .get(url)
+      .then((resp) => {
+        const data = resp.data && resp.data.data;
+        const item = (Array.isArray(data) ? data : []).find(
+          (result) =>
+            result && typeof result.lrc === 'string' && result.lrc.length > 0
+        );
+        if (item) {
+          const lyric = this.lm_normalize_rangotec_lyric(item.lrc);
+          this.lm_log('LYRIC', `success ${url} len=${lyric.length}`);
+          return { status: 'success', lyric };
+        }
+        this.lm_log('LYRIC', `empty ${url}`);
+        return this.lm_empty_lyric_result('empty');
+      })
+      .catch((err) => {
+        this.lm_log(
+          'LYRIC',
+          `fail ${url} ${err && err.message ? err.message : err}`
+        );
+        return this.lm_empty_lyric_result('error');
+      });
+  }
+
+  static lm_fetch_lyric(source_index, title, artist) {
+    switch (source_index) {
+      case 0:
+        return this.lm_fetch_lyric_rangotec(title, artist);
+      case 1:
+        return this.lm_fetch_lyric_lrcapi(title, artist);
+      case 2:
+        return this.lm_fetch_lyric_lrclib(title, artist);
+      case 3:
+        return this.lm_fetch_lyric_xms(title, artist);
+      default:
+        return Promise.resolve(this.lm_empty_lyric_result('error'));
+    }
   }
 
   // cover: iTunes first, then LrcApi, then MusicBrainz CAA
@@ -240,6 +357,20 @@ class localmusic {
       .then((img) => img || musicbrainz());
   }
 
+  static lm_fetch_cover_for_track(track) {
+    const rawTitle = track.title || '';
+    if (!rawTitle) {
+      return Promise.resolve('');
+    }
+    const title = toSimplified(rawTitle);
+    const artist = toSimplified(track.artist || '');
+    const album = toSimplified(track.album || '');
+    if (title !== rawTitle) {
+      this.lm_log('CONV', `title "${rawTitle}" -> "${title}"`);
+    }
+    return this.lm_fetch_cover(title, artist, album);
+  }
+
   // return { img_url, lyric, tlyric }
   static lm_fetch_online(track) {
     const rawTitle = track.title || '';
@@ -255,8 +386,13 @@ class localmusic {
     }
     return Promise.all([
       this.lm_fetch_cover(title, artist, album),
-      this.lm_fetch_lyric(title, artist),
-    ]).then(([img_url, lyric]) => ({ img_url, lyric, tlyric: '' }));
+      this.lm_fetch_lyric(0, title, artist),
+    ]).then(([img_url, lyricResult]) => ({
+      img_url,
+      lyric: lyricResult.lyric,
+      lyric_status: lyricResult.status,
+      tlyric: '',
+    }));
   }
 
   // keep the local playlist banner cover in sync once a real cover is known
@@ -272,42 +408,156 @@ class localmusic {
 
   static lyric(url) {
     const track_id = getParameterByName('track_id', url);
-    const playlist = localStorage.getObject('lmplaylist_reserve');
-    const track = playlist.tracks.find((item) => item.id === track_id);
+    const requestedIndex = Number(getParameterByName('source_index', url));
+    const refresh = getParameterByName('refresh', url) === '1';
+    const source_index = Number.isInteger(requestedIndex)
+      ? requestedIndex
+      : 0;
+    const source = localmusic.lm_get_lyric_source(source_index);
+
     return {
       success: (fn) => {
-        // prefer lyric embedded in the file / local .lrc
-        let lyric = '';
-        if (track.lyrics !== undefined) {
-          [lyric] = track.lyrics;
-        }
-        // both lyric and cover already present: nothing to fetch
-        if (lyric && track.img_url) {
+        let playlist = localStorage.getObject('lmplaylist_reserve');
+        let track =
+          playlist &&
+          Array.isArray(playlist.tracks) &&
+          playlist.tracks.find((item) => item.id === track_id);
+        if (!track || !source) {
           return fn({
-            lyric,
-            tlyric: track.tlyric || '',
-            img_url: track.img_url || '',
+            lyric: localLyricEmptyMessage,
+            tlyric: '',
+            img_url: track ? track.img_url || '' : '',
+            lyric_sources: localmusic.lm_get_lyric_sources(),
+            lyric_source_index: source ? source.index : 0,
+            track_id,
+            request_source_index: source ? source.index : 0,
+            request_applied: true,
           });
         }
-        // otherwise fetch the missing piece(s) online and cache them back,
-        // so a song that has a local lyric but no cover still gets its cover
-        localmusic.lm_fetch_online(track).then((online) => {
-          if (online.lyric && !lyric) {
-            track.lyrics = [online.lyric];
-            if (online.tlyric) track.tlyric = online.tlyric;
-          }
-          if (online.img_url && !track.img_url) {
-            track.img_url = online.img_url;
-          }
-          localmusic.lm_update_playlist_cover(playlist, track.img_url);
+
+        if (!track.lyric_cache) {
+          track.lyric_cache = localmusic.lm_create_lyric_cache();
           localStorage.setObject('lmplaylist_reserve', playlist);
-          // img_url is returned too, so the live now-playing cover can be refreshed
-          fn({
-            lyric: lyric || online.lyric || '',
-            tlyric: track.tlyric || online.tlyric || '',
-            img_url: track.img_url || online.img_url || '',
+        }
+
+        const selectedIndex = refresh
+          ? source_index
+          : track.lyric_cache.selected_index;
+        const selectedSource = localmusic.lm_get_lyric_source(selectedIndex);
+        const cachedSource = track.lyric_cache.sources[selectedIndex];
+        if (!refresh && cachedSource && cachedSource.status !== 'unsearched') {
+          const cachedSelectionVersion =
+            localLyricSelectionVersions[track_id] || 0;
+          const respondWithCache = (img_url) =>
+            fn({
+              lyric: cachedSource.lyric,
+              tlyric: '',
+              img_url: img_url || '',
+              lyric_sources: track.lyric_cache.sources,
+              lyric_source_index: selectedIndex,
+              track_id,
+              request_applied:
+                (localLyricSelectionVersions[track_id] || 0) ===
+                cachedSelectionVersion,
+            });
+          if (track.img_url) {
+            return respondWithCache(track.img_url);
+          }
+          return localmusic.lm_fetch_cover_for_track(track).then((img_url) => {
+            if (img_url) {
+              const latestPlaylist = localStorage.getObject(
+                'lmplaylist_reserve'
+              );
+              const latestTrack =
+                latestPlaylist &&
+                Array.isArray(latestPlaylist.tracks) &&
+                latestPlaylist.tracks.find((item) => item.id === track_id);
+              if (latestTrack && !latestTrack.img_url) {
+                latestTrack.img_url = img_url;
+                localmusic.lm_update_playlist_cover(latestPlaylist, img_url);
+                localStorage.setObject('lmplaylist_reserve', latestPlaylist);
+              }
+            }
+            return respondWithCache(img_url);
           });
-        });
+        }
+
+        const querySource = selectedSource || localLyricSources[0];
+        const rawTitle = track.title || '';
+        const title = toSimplified(rawTitle);
+        const artist = toSimplified(track.artist || '');
+        const album = toSimplified(track.album || '');
+        const requestKey = `${track_id}:${querySource.index}`;
+        const requestVersion = (localLyricRequestVersions[requestKey] || 0) + 1;
+        localLyricRequestVersions[requestKey] = requestVersion;
+        const selectionVersion =
+          (localLyricSelectionVersions[track_id] || 0) + 1;
+        localLyricSelectionVersions[track_id] = selectionVersion;
+
+        const lyricRequest = rawTitle
+          ? localmusic.lm_fetch_lyric(querySource.index, title, artist)
+          : Promise.resolve(localmusic.lm_empty_lyric_result('empty'));
+        const coverRequest = track.img_url
+          ? Promise.resolve(track.img_url)
+          : localmusic.lm_fetch_cover(title, artist, album);
+
+        Promise.all([lyricRequest, coverRequest]).then(
+          ([lyricResult, img_url]) => {
+            playlist = localStorage.getObject('lmplaylist_reserve');
+            track =
+              playlist &&
+              Array.isArray(playlist.tracks) &&
+              playlist.tracks.find((item) => item.id === track_id);
+            if (!track) {
+              return fn({
+                lyric: lyricResult.lyric,
+                tlyric: '',
+                img_url: img_url || '',
+                lyric_sources: localmusic.lm_get_lyric_sources(),
+                lyric_source_index: querySource.index,
+                track_id,
+              });
+            }
+            if (!track.lyric_cache) {
+              track.lyric_cache = localmusic.lm_create_lyric_cache();
+            }
+
+            const isLatestRequest =
+              localLyricRequestVersions[requestKey] === requestVersion;
+            const isLatestSelection =
+              localLyricSelectionVersions[track_id] === selectionVersion;
+            if (isLatestRequest) {
+              track.lyric_cache.sources[querySource.index] = {
+                ...querySource,
+                status: lyricResult.status,
+                lyric: lyricResult.lyric,
+              };
+            }
+            if (isLatestRequest && isLatestSelection) {
+              track.lyric_cache.selected_index = querySource.index;
+              track.lyric_cache.selected_name = querySource.name;
+            }
+            if (img_url && !track.img_url) {
+              track.img_url = img_url;
+            }
+            localmusic.lm_update_playlist_cover(playlist, track.img_url);
+            localStorage.setObject('lmplaylist_reserve', playlist);
+
+            const activeSource = track.lyric_cache.sources[
+              track.lyric_cache.selected_index
+            ];
+            return fn({
+              lyric: activeSource.lyric,
+              tlyric: '',
+              img_url: track.img_url || '',
+              lyric_sources: track.lyric_cache.sources,
+              lyric_source_index: track.lyric_cache.selected_index,
+              track_id,
+              request_source_index: querySource.index,
+              request_applied: isLatestRequest && isLatestSelection,
+            });
+          }
+        );
       },
     };
   }

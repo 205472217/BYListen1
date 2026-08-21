@@ -64,6 +64,14 @@ angular.module('listenone').controller('PlayController', [
     };
     $scope.lyricArray = [];
     $scope.lyricLineNumber = -1;
+    $scope.lyricSources = [
+      { index: 0, name: 'Rangotec', status: 'unsearched' },
+      { index: 1, name: 'LrcApi', status: 'unsearched' },
+      { index: 2, name: 'LRCLIB', status: 'unsearched' },
+      { index: 3, name: 'XMS', status: 'unsearched' },
+    ];
+    $scope.lyricSourceSelection = { index: 0 };
+    $scope.lyricSourceLoadingIndex = null;
     $scope.lastTrackId = null;
 
     $scope.enableGloablShortcut = false;
@@ -468,6 +476,16 @@ angular.module('listenone').controller('PlayController', [
         if (a.index > b.index) return 1;
         return 0;
       });
+      if (result.length === 0 && lyric.trim()) {
+        result = lines
+          .filter((line) => line.trim())
+          .map((line, index) => ({
+            content: line,
+            seconds: 0,
+            translationFlag: false,
+            index,
+          }));
+      }
       // disable tag info, because music provider always write
       // tag info in lyric timeline.
       // result.push.apply(result, timeResult);
@@ -493,6 +511,79 @@ angular.module('listenone').controller('PlayController', [
         });
       }
     }
+
+    function updateLocalLyricResponse(res, track, requestedIndex) {
+      if (
+        !$scope.currentPlaying ||
+        $scope.currentPlaying.id !== track.id ||
+        res.track_id !== track.id
+      ) {
+        return;
+      }
+      if (
+        requestedIndex !== undefined &&
+        res.request_source_index !== requestedIndex
+      ) {
+        return;
+      }
+      if (Array.isArray(res.lyric_sources)) {
+        $scope.lyricSources = res.lyric_sources;
+      }
+      $scope.lyricSourceSelection.index = res.lyric_source_index;
+      $scope.lyricSourceLoadingIndex = null;
+      $scope.lyricArray = parseLyric(res.lyric || '', res.tlyric || '');
+      $scope.lyricLineNumber = -1;
+      $scope.lyricLineNumberTrans = -1;
+      smoothScrollTo(document.querySelector('.lyric'), 0, 300);
+    }
+
+    function updateOnlineCover(res, track) {
+      const { img_url } = res;
+      if (
+        img_url &&
+        $scope.currentPlaying &&
+        $scope.currentPlaying.id === track.id &&
+        $scope.currentPlaying.img_url !== img_url
+      ) {
+        $scope.$evalAsync(() => {
+          $scope.currentPlaying.img_url = img_url;
+        });
+        $rootScope.$broadcast('lmcover:updated', img_url);
+      }
+    }
+
+    $scope.changeLyricSource = (source) => {
+      const track = $scope.currentPlaying;
+      if (
+        !track ||
+        (track.platform !== 'localmusic' && track.source !== 'localmusic')
+      ) {
+        return;
+      }
+      const requestedIndex = source.index;
+      $scope.lyricSourceSelection.index = requestedIndex;
+      $scope.lyricSourceLoadingIndex = requestedIndex;
+      MediaService.getLyric(
+        track.id,
+        track.album_id,
+        track.lyric_url,
+        track.tlyric_url,
+        { source_index: requestedIndex, refresh: true }
+      ).success((res) => {
+        if (
+          !$scope.currentPlaying ||
+          $scope.currentPlaying.id !== track.id ||
+          $scope.lyricSourceSelection.index !== requestedIndex ||
+          !res.request_applied
+        ) {
+          return;
+        }
+        updateOnlineCover(res, track);
+        $scope.$evalAsync(() => {
+          updateLocalLyricResponse(res, track, requestedIndex);
+        });
+      });
+    };
 
     addPlayerListener(mode, (msg, sender, sendResponse) => {
       if (
@@ -652,6 +743,20 @@ angular.module('listenone').controller('PlayController', [
             $scope.lyricLineNumberTrans = -1;
             smoothScrollTo(document.querySelector('.lyric'), 0, 300);
             const track = msg.data.currentPlaying;
+            const isLocalMusic =
+              track.platform === 'localmusic' || track.source === 'localmusic';
+            if (isLocalMusic) {
+              $scope.lyricSources = [
+                { index: 0, name: 'LRCLIB', status: 'unsearched' },
+                { index: 1, name: 'LrcApi', status: 'unsearched' },
+                { index: 2, name: 'XMS', status: 'unsearched' },
+                { index: 3, name: 'Rangotec', status: 'unsearched' },
+              ];
+              $scope.lyricSourceSelection.index = 0;
+              $scope.lyricSourceLoadingIndex = 0;
+            } else {
+              $scope.lyricSourceLoadingIndex = null;
+            }
             $rootScope.page_title = {
               title: track.title,
               artist: track.artist,
@@ -666,25 +771,27 @@ angular.module('listenone').controller('PlayController', [
               track.lyric_url,
               track.tlyric_url
             ).success((res) => {
-              const { lyric, tlyric, img_url } = res;
-              // refresh the live now-playing cover when a cover arrives late
-              // (e.g. local music online search), but only for the current track
               if (
-                img_url &&
-                $scope.currentPlaying &&
-                $scope.currentPlaying.id === track.id &&
-                $scope.currentPlaying.img_url !== img_url
+                !$scope.currentPlaying ||
+                $scope.currentPlaying.id !== track.id
               ) {
-                $scope.$evalAsync(() => {
-                  $scope.currentPlaying.img_url = img_url;
-                });
-                // let the local-music list page refresh its banner cover
-                $rootScope.$broadcast('lmcover:updated', img_url);
-              }
-              if (!lyric) {
                 return;
               }
-              $scope.lyricArray = parseLyric(lyric, tlyric);
+              updateOnlineCover(res, track);
+              $scope.$evalAsync(() => {
+                if (isLocalMusic) {
+                  if (res.request_applied === false) {
+                    return;
+                  }
+                  updateLocalLyricResponse(res, track);
+                  return;
+                }
+                const { lyric, tlyric } = res;
+                if (!lyric) {
+                  return;
+                }
+                $scope.lyricArray = parseLyric(lyric, tlyric);
+              });
             });
             $scope.lastTrackId = msg.data.currentPlaying.id;
             if (isElectron()) {

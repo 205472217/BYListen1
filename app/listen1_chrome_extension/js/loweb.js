@@ -168,14 +168,21 @@ const MediaService = {
     return provider.get_playlist_filters();
   },
 
-  getLyric(track_id, album_id, lyric_url, tlyric_url) {
+  getLyric(track_id, album_id, lyric_url, tlyric_url, options = {}) {
     const provider = getProviderByItemId(track_id);
-    const url = `/lyric?${queryStringify({
+    const query = {
       track_id,
       album_id,
       lyric_url,
       tlyric_url,
-    })}`;
+    };
+    if (options.source_index !== undefined) {
+      query.source_index = options.source_index;
+    }
+    if (options.refresh) {
+      query.refresh = 1;
+    }
+    const url = `/lyric?${queryStringify(query)}`;
     return provider.lyric(url);
   },
 

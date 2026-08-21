@@ -1814,6 +1814,22 @@
                                     >
                                   </div>
                                 </div>
+                                <div class="local-lyric-sources" ng-if="currentPlaying.source === 'localmusic' || currentPlaying.platform === 'localmusic'">
+                                  <label
+                                    ng-repeat="source in lyricSources track by source.index"
+                                    ng-class="{loading: lyricSourceLoadingIndex === source.index}"
+                                  >
+                                    <input
+                                      type="radio"
+                                      name="local-lyric-source-classic"
+                                      ng-model="lyricSourceSelection.index"
+                                      ng-value="source.index"
+                                      ng-change="changeLyricSource(source)"
+                                    />
+                                    <span>{{ source.name }}</span>
+                                    <small ng-if="lyricSourceLoadingIndex === source.index">搜索中</small>
+                                  </label>
+                                </div>
                                 <div class="lyric">
                                   <div class="placeholder"></div>
                                   <p
@@ -3936,7 +3952,23 @@
                       </div>
                     </div>
                     <div class="detail-songinfo">
-                      
+                      <div class="local-lyric-sources" ng-if="currentPlaying.source === 'localmusic' || currentPlaying.platform === 'localmusic'">
+                        <label
+                          ng-repeat="source in lyricSources track by source.index"
+                          ng-class="{loading: lyricSourceLoadingIndex === source.index}"
+                        >
+                          <input
+                            type="radio"
+                            name="local-lyric-source-modern"
+                            ng-model="lyricSourceSelection.index"
+                            ng-value="source.index"
+                            ng-change="changeLyricSource(source)"
+                          />
+                          <span>{{ source.name }}</span>
+                          <small ng-if="lyricSourceLoadingIndex === source.index">搜索中</small>
+                        </label>
+                      </div>
+
                       <div class="lyric">
                         <div class="placeholder"></div>
                         <p

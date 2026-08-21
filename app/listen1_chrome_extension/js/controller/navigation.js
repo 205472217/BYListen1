@@ -688,19 +688,15 @@ angular.module('listenone').controller('NavigationController', [
                   source: 'localmusic',
                   source_url: '',
                   img_url: '',
-                  lyrics: md.common.lyrics,
                   // url: "lmtrack_"+fp,
                   sound_url: `file://${fp}`,
                 };
 
-                // try to fill missing album cover and lyric from the internet
-                localmusic.lm_fetch_online(track).then((online) => {
-                  if (online.img_url) {
-                    track.img_url = online.img_url;
-                  }
-                  if (online.lyric && !track.lyrics) {
-                    track.lyrics = [online.lyric];
-                    if (online.tlyric) track.tlyric = online.tlyric;
+                // fetch only the cover during import; lyrics are fetched from the
+                // selected source when this track is played for the first time
+                localmusic.lm_fetch_cover_for_track(track).then((img_url) => {
+                  if (img_url) {
+                    track.img_url = img_url;
                   }
 
                   const list_id = 'lmplaylist_reserve';

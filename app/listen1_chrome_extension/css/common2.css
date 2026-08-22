@@ -845,13 +845,16 @@ ul.detail-songlist li .desc div.title:hover{
   position: absolute;
   top: 24px;
   left: 24px;
-  height: 19px;
-  width: 19px;
+  height: 24px;
+  width: 24px;
   cursor: pointer;
-  padding: 5px;
-  border-radius: 50%;
+  padding: 8px;
+  border-radius: 25%;
+  display: flex;
+  align-items: center;
+  justify-content: center;
   -webkit-app-region: no-drag;
-  transition: 0.2s;
+  transition: background-color 0.2s;
   z-index: 100;
 }
 .songdetail-wrapper .close:hover {
@@ -865,7 +868,9 @@ ul.detail-songlist li .desc div.title:hover{
   position: absolute;
   top: 24px;
   right: 24px;
-  height: 24px;
+  height: 40px;
+  display: flex;
+  align-items: center;
   cursor: pointer;
   -webkit-app-region: no-drag;
   z-index: 99;
@@ -873,7 +878,14 @@ ul.detail-songlist li .desc div.title:hover{
 
 .songdetail-wrapper .window-control svg {
   margin-left: 8px;
+  padding: 8px;
+  border-radius: 25%;
   stroke: var(--now-playing-close-icon-color);
+  transition: background-color 0.2s;
+}
+
+.songdetail-wrapper .window-control svg:hover {
+  background-color: var(--songlist-hover-background-color);
 }
 
 .songdetail-wrapper .close svg {
@@ -1069,8 +1081,10 @@ ul.detail-songlist li .desc div.title:hover{
   color: var(--lyric-on-cover-color);
 }
 .playsong-detail .detail-songinfo .lyric {
+  position: relative;
   font-size: 16px;
-  height: 100%;
+  height: calc(100% - 80px);
+  margin-top: 80px;
   display: flex;
   flex-direction: column;
   padding-left: 78px;
@@ -2526,7 +2540,7 @@ svg.searchspinner {
   padding: 7px;
   display: flex;
   transition: 0.3s;
-  border-radius: 50%;
+  border-radius: 10px;
 }
 .footer .right-control .mask:hover {
   background-color: var(--songlist-hover-background-color);

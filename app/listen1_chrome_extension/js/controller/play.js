@@ -691,11 +691,7 @@ angular.module('listenone').controller('PlayController', [
         return;
       }
 
-      let windowHeight = lyricElement.offsetHeight;
-      if (useModernTheme()) {
-        windowHeight = document.querySelector('body').offsetHeight - 100;
-      }
-
+      const windowHeight = lyricElement.offsetHeight;
       const adjustOffset = 30;
       const offset = lineElement.offsetTop - windowHeight / 2 + adjustOffset;
       smoothScrollTo(lyricElement, offset, 500);

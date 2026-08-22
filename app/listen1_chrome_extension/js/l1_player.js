@@ -126,6 +126,19 @@
         player.setNewPlaylist(list);
       });
     },
+    updateTrackCover(id, img_url) {
+      getPlayerAsync(mode, (player) => {
+        const track = player.playlist.find((item) => item.id === id);
+        if (!track || track.img_url === img_url) {
+          return;
+        }
+        track.img_url = img_url;
+        player.sendPlaylistEvent();
+        if (player.currentAudio && player.currentAudio.id === id) {
+          player.sendLoadEvent();
+        }
+      });
+    },
     getTrackById(id) {
       if (!l1Player.status.playlist) return null;
       return l1Player.status.playlist.find((track) => track.id === id);

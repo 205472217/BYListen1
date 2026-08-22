@@ -1,11 +1,12 @@
 /* eslint-disable no-param-reassign */
 /* eslint-disable no-unused-vars */
 /* global getParameterByName toSimplified */
+const defaultLocalMusicCover = 'images/mycover.jpg';
 const defaultLocalMusicPlaylist = {
   tracks: [],
   info: {
     id: 'lmplaylist_reserve',
-    cover_img_url: 'images/mycover.jpg',
+    cover_img_url: defaultLocalMusicCover,
     title: '本地音乐',
     source_url: '',
   },
@@ -31,6 +32,26 @@ class localmusic {
     };
   }
 
+  static lm_has_real_cover(img_url) {
+    return Boolean(img_url && img_url !== defaultLocalMusicCover);
+  }
+
+  static lm_apply_default_cover(track) {
+    if (track && !track.img_url) {
+      track.img_url = defaultLocalMusicCover;
+    }
+    return track;
+  }
+
+  static lm_apply_default_covers(playlist) {
+    if (playlist && Array.isArray(playlist.tracks)) {
+      playlist.tracks.forEach((track) =>
+        localmusic.lm_apply_default_cover(track)
+      );
+    }
+    return playlist;
+  }
+
   static lm_get_playlist(url) {
     const list_id = getParameterByName('list_id', url);
     return {
@@ -40,6 +61,7 @@ class localmusic {
         if (playlist === null || playlist === undefined) {
           playlist = defaultLocalMusicPlaylist;
         }
+        localmusic.lm_apply_default_covers(playlist);
         fn(playlist);
       },
     };
@@ -59,6 +81,7 @@ class localmusic {
           playlist.info.title = album;
           playlist.tracks = playlist.tracks.filter((tr) => tr.album === album);
         }
+        localmusic.lm_apply_default_covers(playlist);
         fn(playlist);
       },
     };
@@ -80,6 +103,7 @@ class localmusic {
             (tr) => tr.artist === artist
           );
         }
+        localmusic.lm_apply_default_covers(playlist);
         fn(playlist);
       },
     };
@@ -397,13 +421,37 @@ class localmusic {
 
   // keep the local playlist banner cover in sync once a real cover is known
   static lm_update_playlist_cover(playlist, img_url) {
-    if (!img_url || !playlist || !playlist.info) {
+    if (
+      !localmusic.lm_has_real_cover(img_url) ||
+      !playlist ||
+      !playlist.info
+    ) {
       return;
     }
     const cur = playlist.info.cover_img_url;
-    if (!cur || cur === 'images/mycover.jpg') {
+    if (!localmusic.lm_has_real_cover(cur)) {
       playlist.info.cover_img_url = img_url;
     }
+  }
+
+  static lm_update_track_cover(list_id, track_id, img_url) {
+    if (!localmusic.lm_has_real_cover(img_url)) {
+      return null;
+    }
+    const playlist = localStorage.getObject(list_id);
+    const track =
+      playlist &&
+      Array.isArray(playlist.tracks) &&
+      playlist.tracks.find((item) => item.id === track_id);
+    if (!track) {
+      return null;
+    }
+    if (!localmusic.lm_has_real_cover(track.img_url)) {
+      track.img_url = img_url;
+    }
+    localmusic.lm_update_playlist_cover(playlist, track.img_url);
+    localStorage.setObject(list_id, playlist);
+    return playlist;
   }
 
   static lyric(url) {
@@ -460,7 +508,7 @@ class localmusic {
                 (localLyricSelectionVersions[track_id] || 0) ===
                 cachedSelectionVersion,
             });
-          if (track.img_url) {
+          if (localmusic.lm_has_real_cover(track.img_url)) {
             return respondWithCache(track.img_url);
           }
           return localmusic.lm_fetch_cover_for_track(track).then((img_url) => {
@@ -472,7 +520,10 @@ class localmusic {
                 latestPlaylist &&
                 Array.isArray(latestPlaylist.tracks) &&
                 latestPlaylist.tracks.find((item) => item.id === track_id);
-              if (latestTrack && !latestTrack.img_url) {
+              if (
+                latestTrack &&
+                !localmusic.lm_has_real_cover(latestTrack.img_url)
+              ) {
                 latestTrack.img_url = img_url;
                 localmusic.lm_update_playlist_cover(latestPlaylist, img_url);
                 localStorage.setObject('lmplaylist_reserve', latestPlaylist);
@@ -497,7 +548,7 @@ class localmusic {
         const lyricRequest = rawTitle
           ? localmusic.lm_fetch_lyric(querySource.index, title, artist)
           : Promise.resolve(localmusic.lm_empty_lyric_result('empty'));
-        const coverRequest = track.img_url
+        const coverRequest = localmusic.lm_has_real_cover(track.img_url)
           ? Promise.resolve(track.img_url)
           : localmusic.lm_fetch_cover(title, artist, album);
 
@@ -537,7 +588,10 @@ class localmusic {
               track.lyric_cache.selected_index = querySource.index;
               track.lyric_cache.selected_name = querySource.name;
             }
-            if (img_url && !track.img_url) {
+            if (
+              img_url &&
+              !localmusic.lm_has_real_cover(track.img_url)
+            ) {
               track.img_url = img_url;
             }
             localmusic.lm_update_playlist_cover(playlist, track.img_url);
@@ -572,6 +626,7 @@ class localmusic {
     }
     const tracksIdSet = {};
     tracks.forEach((tr) => {
+      localmusic.lm_apply_default_cover(tr);
       tracksIdSet[tr.id] = true;
     });
     playlist.tracks = tracks.concat(

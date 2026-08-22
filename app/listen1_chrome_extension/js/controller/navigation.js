@@ -687,30 +687,48 @@ angular.module('listenone').controller('NavigationController', [
                   album_id: `lmalbum_${md.common.album}`,
                   source: 'localmusic',
                   source_url: '',
-                  img_url: '',
+                  img_url: 'images/mycover.jpg',
                   // url: "lmtrack_"+fp,
                   sound_url: `file://${fp}`,
                 };
 
+                const list_id = 'lmplaylist_reserve';
+                MediaService.addPlaylist(list_id, [track]).success((res) => {
+                  const { playlist } = res;
+                  $scope.songs = playlist.tracks;
+                  $scope.list_id = playlist.info.id;
+                  $scope.cover_img_url = playlist.info.cover_img_url;
+                  $scope.playlist_title = playlist.info.title;
+                  $scope.playlist_source_url = playlist.info.source_url;
+                  $scope.is_mine = playlist.info.id.slice(0, 2) === 'my';
+                  $scope.is_local = playlist.info.id.slice(0, 2) === 'lm';
+                  $scope.$evalAsync();
+                });
+
                 // fetch only the cover during import; lyrics are fetched from the
                 // selected source when this track is played for the first time
                 localmusic.lm_fetch_cover_for_track(track).then((img_url) => {
-                  if (img_url) {
-                    track.img_url = img_url;
+                  if (!img_url) {
+                    return;
                   }
-
-                  const list_id = 'lmplaylist_reserve';
-                  MediaService.addPlaylist(list_id, [track]).success((res) => {
-                    const { playlist } = res;
+                  track.img_url = img_url;
+                  const playlist = localmusic.lm_update_track_cover(
+                    list_id,
+                    track.id,
+                    img_url
+                  );
+                  if (playlist) {
+                    const storedTrack = playlist.tracks.find(
+                      (item) => item.id === track.id
+                    );
+                    l1Player.updateTrackCover(
+                      track.id,
+                      storedTrack ? storedTrack.img_url : img_url
+                    );
                     $scope.songs = playlist.tracks;
-                    $scope.list_id = playlist.info.id;
                     $scope.cover_img_url = playlist.info.cover_img_url;
-                    $scope.playlist_title = playlist.info.title;
-                    $scope.playlist_source_url = playlist.info.source_url;
-                    $scope.is_mine = playlist.info.id.slice(0, 2) === 'my';
-                    $scope.is_local = playlist.info.id.slice(0, 2) === 'lm';
                     $scope.$evalAsync();
-                  });
+                  }
                 });
               });
             });

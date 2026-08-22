@@ -4083,8 +4083,8 @@
                         def:song.stageId === getSongIdByIndex(currentIndex+2)||song.stageId === getSongIdByIndex(currentIndex-2)}" class="hid"
                             id="song{{ song.id }}" ng-repeat="song in staged_playlist track by song.stageId" draggable="true">
                     <img
-                    err-src="https://y.gtimg.cn/mediastyle/global/img/album_300.png"
-                    ng-src="{{song.img_url.replace('/120/','/300/')}}?param=300y300" alt="">
+                    err-src="images/mycover.jpg"
+                    ng-src="{{(song.img_url || 'images/mycover.jpg').replace('/120/','/300/')}}?param=300y300" alt="">
                     </li>
                     </ul>
                     <div class="cover-list">

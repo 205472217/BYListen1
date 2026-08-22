@@ -90,6 +90,20 @@ angular.module('listenone').controller('PlayController', [
       return `${songId}_${index}`;
     };
 
+    function isLocalMusicTrack(track) {
+      return (
+        track &&
+        (track.platform === 'localmusic' || track.source === 'localmusic')
+      );
+    }
+
+    function getTrackCover(track) {
+      if (isLocalMusicTrack(track) && !track.img_url) {
+        return 'images/mycover.jpg';
+      }
+      return track && track.img_url;
+    }
+
     $scope.refreshStage = () => {
       if ($scope.playlist === undefined) {
         return;
@@ -102,7 +116,11 @@ angular.module('listenone').controller('PlayController', [
         if (!song) {
           break;
         }
-        $scope.staged_playlist.push({ ...song, stageId: `${song.id}_${i}` });
+        $scope.staged_playlist.push({
+          ...song,
+          img_url: getTrackCover(song),
+          stageId: `${song.id}_${i}`,
+        });
         i += 1;
       }
     };
@@ -547,7 +565,19 @@ angular.module('listenone').controller('PlayController', [
       ) {
         $scope.$evalAsync(() => {
           $scope.currentPlaying.img_url = img_url;
+          const playlistTrack = ($scope.playlist || []).find(
+            (item) => item.id === track.id
+          );
+          if (playlistTrack) {
+            playlistTrack.img_url = img_url;
+          }
+          $scope.staged_playlist.forEach((item) => {
+            if (item.id === track.id) {
+              item.img_url = img_url;
+            }
+          });
         });
+        l1Player.updateTrackCover(track.id, img_url);
         $rootScope.$broadcast('lmcover:updated', img_url);
       }
     }
@@ -702,6 +732,9 @@ angular.module('listenone').controller('PlayController', [
 
           case 'LOAD': {
             $scope.currentPlaying = msg.data.currentPlaying;
+            $scope.currentPlaying.img_url = getTrackCover(
+              $scope.currentPlaying
+            );
             const { length, index } = msg.data.playlist;
 
             if (useModernTheme()) {
@@ -813,9 +846,12 @@ angular.module('listenone').controller('PlayController', [
           case 'PLAYLIST': {
             // 'player:playlist'
             $scope.$evalAsync(() => {
-              $scope.playlist = msg.data;
+              $scope.playlist = msg.data.map((track) => ({
+                ...track,
+                img_url: getTrackCover(track),
+              }));
               $scope.refreshStage();
-              localStorage.setObject('current-playing', msg.data);
+              localStorage.setObject('current-playing', $scope.playlist);
             });
 
             break;

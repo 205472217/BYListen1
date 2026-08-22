@@ -972,6 +972,33 @@ ul.detail-songlist li .desc div.title:hover{
 .playsong-detail .detail-songinfo .local-lyric-sources label.loading {
   color: var(--theme-color);
 }
+.playsong-detail
+  .detail-songinfo
+  .local-lyric-sources
+  .lyric-time-adjust {
+  width: 66px;
+  min-width: 66px;
+  min-height: 0;
+  padding: 4px 0;
+  border: 1px solid currentColor;
+  border-radius: 6px;
+  color: inherit;
+  background: transparent;
+  cursor: pointer;
+}
+.playsong-detail
+  .detail-songinfo
+  .local-lyric-sources
+  .lyric-time-adjust:hover:not(:disabled) {
+  color: var(--theme-color);
+}
+.playsong-detail
+  .detail-songinfo
+  .local-lyric-sources
+  .lyric-time-adjust:disabled {
+  opacity: 0.35;
+  cursor: default;
+}
 .playsong-detail .detail-head-title {
   max-width: 54vh;
   margin-top: 24px;

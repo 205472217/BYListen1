@@ -152,6 +152,96 @@ class localmusic {
     return localLyricSources.find((source) => source.index === index);
   }
 
+  static lm_shift_lyric_timestamps(lyric, offset_ms) {
+    if (typeof lyric !== 'string' || !Number.isFinite(offset_ms)) {
+      return { lyric, adjusted: false };
+    }
+
+    let adjusted = false;
+    const shiftedLyric = lyric.replace(
+      /\[(\d{2,}):(\d{2})(?:\.(\d{1,3}))?\]/g,
+      (tag, minuteText, secondText, millisecondText = '') => {
+        const milliseconds = parseInt(
+          millisecondText.padEnd(3, '0') || '0',
+          10
+        );
+        const originalTime =
+          parseInt(minuteText, 10) * 60 * 1000 +
+          parseInt(secondText, 10) * 1000 +
+          milliseconds;
+        const shiftedTime = Math.max(originalTime + offset_ms, 0);
+        const minutes = Math.floor(shiftedTime / 60000);
+        const seconds = Math.floor((shiftedTime % 60000) / 1000);
+        const shiftedMilliseconds = shiftedTime % 1000;
+        const minuteWidth = Math.max(2, minuteText.length);
+        adjusted = true;
+        return `[${String(minutes).padStart(minuteWidth, '0')}:${String(
+          seconds
+        ).padStart(2, '0')}.${String(shiftedMilliseconds).padStart(3, '0')}]`;
+      }
+    );
+
+    return { lyric: shiftedLyric, adjusted };
+  }
+
+  static adjust_lyric_time(track_id, source_index, offset_ms) {
+    return {
+      success: (fn) => {
+        const playlist = localStorage.getObject('lmplaylist_reserve');
+        const track =
+          playlist &&
+          Array.isArray(playlist.tracks) &&
+          playlist.tracks.find((item) => item.id === track_id);
+        const sourceIndex = Number(source_index);
+        const offsetMilliseconds = Number(offset_ms);
+        const cachedSource =
+          track &&
+          track.lyric_cache &&
+          Array.isArray(track.lyric_cache.sources) &&
+          track.lyric_cache.sources.find(
+            (item) => item && item.index === sourceIndex
+          );
+        if (
+          !track ||
+          !cachedSource ||
+          cachedSource.status !== 'success' ||
+          !Number.isFinite(offsetMilliseconds)
+        ) {
+          return fn({
+            adjusted: false,
+            track_id,
+            lyric_source_index: sourceIndex,
+          });
+        }
+
+        const result = localmusic.lm_shift_lyric_timestamps(
+          cachedSource.lyric,
+          offsetMilliseconds
+        );
+        if (!result.adjusted) {
+          return fn({
+            adjusted: false,
+            track_id,
+            lyric_source_index: sourceIndex,
+          });
+        }
+
+        cachedSource.lyric = result.lyric;
+        localStorage.setObject('lmplaylist_reserve', playlist);
+        return fn({
+          adjusted: true,
+          lyric: cachedSource.lyric,
+          tlyric: '',
+          lyric_sources: track.lyric_cache.sources,
+          lyric_source_index: sourceIndex,
+          track_id,
+          request_source_index: sourceIndex,
+          request_applied: true,
+        });
+      },
+    };
+  }
+
   static lm_empty_lyric_result(status) {
     return {
       status,

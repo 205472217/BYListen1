@@ -530,7 +530,12 @@ angular.module('listenone').controller('PlayController', [
       }
     }
 
-    function updateLocalLyricResponse(res, track, requestedIndex) {
+    function updateLocalLyricResponse(
+      res,
+      track,
+      requestedIndex,
+      resetScroll = true
+    ) {
       if (
         !$scope.currentPlaying ||
         $scope.currentPlaying.id !== track.id ||
@@ -552,7 +557,9 @@ angular.module('listenone').controller('PlayController', [
       $scope.lyricArray = parseLyric(res.lyric || '', res.tlyric || '');
       $scope.lyricLineNumber = -1;
       $scope.lyricLineNumberTrans = -1;
-      smoothScrollTo(document.querySelector('.lyric'), 0, 300);
+      if (resetScroll) {
+        smoothScrollTo(document.querySelector('.lyric'), 0, 300);
+      }
     }
 
     function updateOnlineCover(res, track) {
@@ -615,6 +622,108 @@ angular.module('listenone').controller('PlayController', [
       });
     };
 
+    $scope.canAdjustLyricTime = () => {
+      const source = $scope.lyricSources.find(
+        (item) => item.index === $scope.lyricSourceSelection.index
+      );
+      return (
+        $scope.lyricSourceLoadingIndex === null &&
+        source &&
+        source.status === 'success'
+      );
+    };
+
+    $scope.adjustLyricTime = (offsetMilliseconds) => {
+      const track = $scope.currentPlaying;
+      if (
+        !track ||
+        (track.platform !== 'localmusic' && track.source !== 'localmusic') ||
+        !$scope.canAdjustLyricTime()
+      ) {
+        return;
+      }
+      const requestedIndex = $scope.lyricSourceSelection.index;
+      MediaService.adjustLyricTime(
+        track.id,
+        requestedIndex,
+        offsetMilliseconds
+      ).success((res) => {
+        if (
+          !res.adjusted ||
+          !$scope.currentPlaying ||
+          $scope.currentPlaying.id !== track.id ||
+          $scope.lyricSourceSelection.index !== requestedIndex
+        ) {
+          return;
+        }
+        $scope.$evalAsync(() => {
+          updateLocalLyricResponse(res, track, requestedIndex, false);
+          $timeout(() => {
+            updateLyricPosition(l1Player.status.playing.pos || 0);
+          });
+        });
+      });
+    };
+
+    function updateLyricPosition(currentSeconds) {
+      let lastObject = null;
+      let lastObjectTrans = null;
+      $scope.lyricArray.forEach((lyric) => {
+        if (currentSeconds >= lyric.seconds / 1000) {
+          if (lyric.translationFlag !== true) {
+            lastObject = lyric;
+          } else {
+            lastObjectTrans = lyric;
+          }
+        }
+      });
+      if (!lastObject || lastObject.lineNumber === $scope.lyricLineNumber) {
+        return;
+      }
+
+      const lineElement = document.querySelector(
+        `.playsong-detail .detail-songinfo .lyric p[data-line="${lastObject.lineNumber}"]`
+      );
+      const lyricElement = document.querySelector(
+        '.playsong-detail .detail-songinfo .lyric'
+      );
+      if (!lineElement || !lyricElement) {
+        return;
+      }
+
+      let windowHeight = lyricElement.offsetHeight;
+      if (useModernTheme()) {
+        windowHeight = document.querySelector('body').offsetHeight - 100;
+      }
+
+      const adjustOffset = 30;
+      const offset = lineElement.offsetTop - windowHeight / 2 + adjustOffset;
+      smoothScrollTo(lyricElement, offset, 500);
+      $scope.lyricLineNumber = lastObject.lineNumber;
+      if (
+        lastObjectTrans &&
+        lastObjectTrans.lineNumber !== $scope.lyricLineNumberTrans
+      ) {
+        $scope.lyricLineNumberTrans = lastObjectTrans.lineNumber;
+      }
+      if (isElectron()) {
+        const { ipcRenderer } = require('electron');
+        const currentLyric = $scope.lyricArray[lastObject.lineNumber].content;
+        let currentLyricTrans = '';
+        if (
+          $scope.enableLyricFloatingWindowTranslation === true &&
+          lastObjectTrans
+        ) {
+          currentLyricTrans =
+            $scope.lyricArray[lastObjectTrans.lineNumber].content;
+        }
+        ipcRenderer.send('currentLyric', {
+          lyric: currentLyric,
+          tlyric: currentLyricTrans,
+        });
+      }
+    }
+
     addPlayerListener(mode, (msg, sender, sendResponse) => {
       if (
         typeof msg.type === 'string' &&
@@ -640,63 +749,7 @@ angular.module('listenone').controller('PlayController', [
             // 'currentTrack:position'
             // update lyric position
             if (!l1Player.status.playing.id) break;
-            const currentSeconds = msg.data.pos;
-            let lastObject = null;
-            let lastObjectTrans = null;
-            $scope.lyricArray.forEach((lyric) => {
-              if (currentSeconds >= lyric.seconds / 1000) {
-                if (lyric.translationFlag !== true) {
-                  lastObject = lyric;
-                } else {
-                  lastObjectTrans = lyric;
-                }
-              }
-            });
-            if (
-              lastObject &&
-              lastObject.lineNumber !== $scope.lyricLineNumber
-            ) {
-              const lineElement = document.querySelector(
-                `.playsong-detail .detail-songinfo .lyric p[data-line="${lastObject.lineNumber}"]`
-              );
-
-              let windowHeight = document.querySelector(
-                '.playsong-detail .detail-songinfo .lyric'
-              ).offsetHeight;
-              if (useModernTheme()) {
-                windowHeight =
-                  document.querySelector('body').offsetHeight - 100;
-              }
-
-              const adjustOffset = 30;
-              const offset =
-                lineElement.offsetTop - windowHeight / 2 + adjustOffset;
-              smoothScrollTo(document.querySelector('.lyric'), offset, 500);
-              $scope.lyricLineNumber = lastObject.lineNumber;
-              if (
-                lastObjectTrans &&
-                lastObjectTrans.lineNumber !== $scope.lyricLineNumberTrans
-              ) {
-                $scope.lyricLineNumberTrans = lastObjectTrans.lineNumber;
-              }
-              if (isElectron()) {
-                const { ipcRenderer } = require('electron');
-                const currentLyric =
-                  $scope.lyricArray[lastObject.lineNumber].content;
-                let currentLyricTrans = '';
-                if (
-                  $scope.enableLyricFloatingWindowTranslation === true &&
-                  lastObjectTrans
-                ) {
-                  currentLyricTrans =
-                    $scope.lyricArray[lastObjectTrans.lineNumber].content;
-                }
-                ipcRenderer.send('currentLyric', {
-                  lyric: currentLyric,
-                  tlyric: currentLyricTrans,
-                });
-              }
-            }
+            updateLyricPosition(msg.data.pos);
 
             // 'currentTrack:duration'
             (() => {

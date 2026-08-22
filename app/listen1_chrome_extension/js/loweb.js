@@ -186,6 +186,11 @@ const MediaService = {
     return provider.lyric(url);
   },
 
+  adjustLyricTime(track_id, source_index, offset_ms) {
+    const provider = getProviderByItemId(track_id);
+    return provider.adjust_lyric_time(track_id, source_index, offset_ms);
+  },
+
   showFavPlaylist() {
     return myplaylist.show_myplaylist('favorite');
   },

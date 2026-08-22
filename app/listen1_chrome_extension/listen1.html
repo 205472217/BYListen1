@@ -1815,6 +1815,15 @@
                                   </div>
                                 </div>
                                 <div class="local-lyric-sources" ng-if="currentPlaying.source === 'localmusic' || currentPlaying.platform === 'localmusic'">
+                                  <button
+                                    type="button"
+                                    class="lyric-time-adjust"
+                                    title="歌词时间增加 0.5 秒"
+                                    ng-click="adjustLyricTime(500)"
+                                    ng-disabled="!canAdjustLyricTime()"
+                                  >
+                                    +0.5 秒
+                                  </button>
                                   <label
                                     ng-repeat="source in lyricSources track by source.index"
                                     ng-class="{loading: lyricSourceLoadingIndex === source.index}"
@@ -1829,6 +1838,15 @@
                                     <span>{{ source.name }}</span>
                                     <small ng-if="lyricSourceLoadingIndex === source.index">搜索中</small>
                                   </label>
+                                  <button
+                                    type="button"
+                                    class="lyric-time-adjust"
+                                    title="歌词时间减少 0.5 秒"
+                                    ng-click="adjustLyricTime(-500)"
+                                    ng-disabled="!canAdjustLyricTime()"
+                                  >
+                                    -0.5 秒
+                                  </button>
                                 </div>
                                 <div class="lyric">
                                   <div class="placeholder"></div>
@@ -3954,6 +3972,15 @@
                     </div>
                     <div class="detail-songinfo">
                       <div class="local-lyric-sources" ng-if="currentPlaying.source === 'localmusic' || currentPlaying.platform === 'localmusic'">
+                        <button
+                          type="button"
+                          class="lyric-time-adjust"
+                          title="歌词时间增加 0.5 秒"
+                          ng-click="adjustLyricTime(500)"
+                          ng-disabled="!canAdjustLyricTime()"
+                        >
+                          +0.5 秒
+                        </button>
                         <label
                           ng-repeat="source in lyricSources track by source.index"
                           ng-class="{loading: lyricSourceLoadingIndex === source.index}"
@@ -3968,6 +3995,15 @@
                           <span>{{ source.name }}</span>
                           <small ng-if="lyricSourceLoadingIndex === source.index">搜索中</small>
                         </label>
+                        <button
+                          type="button"
+                          class="lyric-time-adjust"
+                          title="歌词时间减少 0.5 秒"
+                          ng-click="adjustLyricTime(-500)"
+                          ng-disabled="!canAdjustLyricTime()"
+                        >
+                          -0.5 秒
+                        </button>
                       </div>
 
                       <div class="lyric">

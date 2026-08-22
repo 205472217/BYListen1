@@ -1663,7 +1663,8 @@ svg.searchspinner {
   bottom: 0;
 }
 .footer .left-control {
-  flex: 0 0 36%;
+  flex: 1 0 208px;
+  min-width: 130px;
   display: flex;
   align-items: center;
   overflow: hidden;
@@ -1680,7 +1681,7 @@ svg.searchspinner {
   font-size: 22px;
   border-radius: 10px;
   padding: 7px;
-  margin: 37px;
+  margin: 0 12px;
   transition: all 0.3s;
   background: transparent;
 }
@@ -1710,7 +1711,7 @@ svg.searchspinner {
 }
 
 .footer .main-info {
-  flex: 1;
+  flex: 0 0 220px;
   display: flex;
   z-index: 1;
   justify-content: center;
@@ -1970,9 +1971,105 @@ svg.searchspinner {
   display: flex;
 }
 
+.footer .legacy-footertime {
+  display: none;
+}
+
+.footer .position-control {
+  flex: 0 0 270px;
+  min-width: 270px;
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  font-size: 12px;
+  font-weight: 500;
+  white-space: nowrap;
+}
+.footer .position-control .playbar {
+  min-width: 0;
+  flex: 0 0 155px;
+  display: flex;
+  align-items: center;
+}
+.footer .position-control .icon {
+  flex: 0 0 24px;
+  color: var(--text-default-color);
+  padding: 7px;
+  display: flex;
+}
+.footer .position-control .playbar-clickable {
+  flex: 1;
+  margin-right: 4px;
+  padding: 5px 0;
+  cursor: pointer;
+}
+.footer .position-control .timeswitch {
+  flex: 0 0 auto;
+  display: flex;
+  align-items: center;
+  font-variant-numeric: tabular-nums;
+}
+.footer .position-control .time-divider {
+  padding: 0 3px;
+  font-weight: 700;
+}
+.footer .position-control .barbg,
+.footer .volume-control .barbg {
+  height: 3px;
+  background: var(--footer-player-bar-background-color);
+}
+.footer .position-control .barbg .cur,
+.footer .volume-control .barbg .cur {
+  height: 100%;
+  position: relative;
+  background: var(--footer-player-bar-cur-background-color);
+}
+.footer .position-control .barbg .cur .btn,
+.footer .volume-control .barbg .cur .btn {
+  width: 2px;
+  height: 8px;
+  position: absolute;
+  right: -2px;
+  top: -5px;
+  transition: 0.3s;
+  background: var(--footer-player-bar-cur-button-color);
+}
+.footer .position-control .playbar-clickable:hover .cur,
+.footer .volume-control .m-pbar:hover .cur {
+  background: var(--theme-color);
+}
+.footer .position-control .playbar-clickable:hover .btn,
+.footer .volume-control .m-pbar:hover .btn {
+  width: 10px;
+  height: 10px;
+  border-radius: 5px;
+  top: -3px;
+}
+
+.footer .volume-control {
+  flex: 0 0 150px;
+  min-width: 150px;
+  margin-right: 18px;
+  display: flex;
+  align-items: center;
+}
+.footer .volume-control .icon {
+  flex: 0 0 24px;
+  padding: 7px;
+  color: var(--text-default-color);
+  cursor: pointer;
+}
+.footer .volume-control .m-pbar {
+  flex: 1;
+  padding: 5px 0;
+  cursor: pointer;
+}
+
 .footer .left-control .detail {
-  max-width: 356px;
-  margin-left: 37px;
+  flex: 1;
+  min-width: 0;
+  max-width: 230px;
+  margin-left: 18px;
   position: relative;
   overflow: hidden;
   display: flex;
@@ -2321,7 +2418,8 @@ svg.searchspinner {
 }
 
 .footer .right-control {
-  flex: 0 0 36%;
+  flex: 1 0 478px;
+  min-width: 220px;
   display: flex;
   align-items: center;
   justify-content: flex-end;
@@ -2332,7 +2430,7 @@ svg.searchspinner {
   display: flex;
   justify-content: center;
   align-items: center;
-  margin-right: 37px;
+  margin-right: 18px;
   padding: 7px;
 }
 .footer .right-control .ctrl {
@@ -2341,7 +2439,7 @@ svg.searchspinner {
   align-items: center;
 }
 .footer .right-control .ctrl a {
-  margin-right: 32px;
+  margin-right: 18px;
   padding: 7px;
   display: flex;
   transition: 0.3s;
@@ -2379,7 +2477,7 @@ svg.searchspinner {
   color: var(--theme-color);
 }
 .footer .right-control .mask {
-  margin-right: 32px;
+  margin-right: 18px;
   padding: 7px;
   display: flex;
   transition: 0.3s;
@@ -2401,7 +2499,7 @@ svg.searchspinner {
 }
 
 .footer .right-control .lyric-toggle {
-  margin-right: 32px;
+  margin-right: 18px;
   padding: 7px;
   display: flex;
   cursor: pointer;

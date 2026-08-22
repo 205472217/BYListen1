@@ -72,8 +72,8 @@ switch (process.platform) {
 // be closed automatically when the JavaScript object is garbage collected.
 /** @type {{ width: number; height: number; maximized: boolean; zoomLevel: number}} */
 const windowState = store.get("windowState") || {
-  width: 1000,
-  height: 670,
+  width: 1200,
+  height: 800,
   maximized: false,
   zoomLevel: 0,
 };
@@ -346,10 +346,10 @@ function createWindow() {
   );
   // Create the browser window.
   mainWindow = new BrowserWindow({
-    width: windowState.width,
-    height: windowState.height,
-    minHeight: 300,
-    minWidth: 600,
+    width: Math.max(windowState.width, 1200),
+    height: Math.max(windowState.height, 800),
+    minHeight: 800,
+    minWidth: 1200,
     webPreferences: {
       nodeIntegration: true,
       enableRemoteModule: true,

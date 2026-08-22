@@ -747,10 +747,10 @@ angular.module('listenone').controller('PlayController', [
               track.platform === 'localmusic' || track.source === 'localmusic';
             if (isLocalMusic) {
               $scope.lyricSources = [
-                { index: 0, name: 'LRCLIB', status: 'unsearched' },
+                { index: 0, name: 'Rangotec', status: 'unsearched' },
                 { index: 1, name: 'LrcApi', status: 'unsearched' },
-                { index: 2, name: 'XMS', status: 'unsearched' },
-                { index: 3, name: 'Rangotec', status: 'unsearched' },
+                { index: 2, name: 'LRCLIB', status: 'unsearched' },
+                { index: 3, name: 'XMS', status: 'unsearched' },
               ];
               $scope.lyricSourceSelection.index = 0;
               $scope.lyricSourceLoadingIndex = 0;

@@ -1662,8 +1662,15 @@ svg.searchspinner {
   position: absolute;
   bottom: 0;
 }
+.footer .left-region {
+  flex: 1 1 588px;
+  min-width: 0;
+  display: flex;
+  align-items: center;
+  overflow: hidden;
+}
 .footer .left-control {
-  flex: 1 0 208px;
+  flex: 0 1 208px;
   min-width: 130px;
   display: flex;
   align-items: center;
@@ -1672,9 +1679,8 @@ svg.searchspinner {
   opacity: 1;
 }
 .footer .left-control.slidedown {
-  flex: 0 0 0;
   opacity: 0;
-  transform: scaleX(0);
+  pointer-events: none;
 }
 .footer .left-control .icon {
   display: flex;
@@ -1980,9 +1986,8 @@ svg.searchspinner {
 }
 
 .footer .position-control {
-  flex: 0 0 380px;
-  min-width: 380px;
-  padding-right: 110px;
+  flex: 0 0 270px;
+  min-width: 270px;
   box-sizing: border-box;
   display: flex;
   align-items: center;
@@ -2423,18 +2428,15 @@ svg.searchspinner {
   text-align: right;
 }
 
-.footer .footer-main.slidedown .position-control,
+.footer .footer-main.slidedown .left-region,
 .footer .footer-main.slidedown .right-control {
   flex: 0 0 50%;
 }
-.footer .footer-main.slidedown .right-control {
-  padding-right: 160px;
-}
 
 .footer .right-control {
-  flex: 1 0 588px;
-  min-width: 330px;
-  padding-left: 110px;
+  flex: 1 1 588px;
+  min-width: 0;
+  padding-left: 0;
   box-sizing: border-box;
   display: flex;
   align-items: center;

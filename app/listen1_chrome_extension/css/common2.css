@@ -1711,7 +1711,11 @@ svg.searchspinner {
 }
 
 .footer .main-info {
-  flex: 0 0 220px;
+  position: absolute;
+  left: 50%;
+  width: 220px;
+  height: 100px;
+  transform: translateX(-50%);
   display: flex;
   z-index: 1;
   justify-content: center;
@@ -1976,8 +1980,10 @@ svg.searchspinner {
 }
 
 .footer .position-control {
-  flex: 0 0 270px;
-  min-width: 270px;
+  flex: 0 0 380px;
+  min-width: 380px;
+  padding-right: 110px;
+  box-sizing: border-box;
   display: flex;
   align-items: center;
   gap: 10px;
@@ -2417,9 +2423,19 @@ svg.searchspinner {
   text-align: right;
 }
 
+.footer .footer-main.slidedown .position-control,
+.footer .footer-main.slidedown .right-control {
+  flex: 0 0 50%;
+}
+.footer .footer-main.slidedown .right-control {
+  padding-right: 160px;
+}
+
 .footer .right-control {
-  flex: 1 0 478px;
-  min-width: 220px;
+  flex: 1 0 588px;
+  min-width: 330px;
+  padding-left: 110px;
+  box-sizing: border-box;
   display: flex;
   align-items: center;
   justify-content: flex-end;
@@ -2450,25 +2466,29 @@ svg.searchspinner {
   background-color: var(--songlist-hover-background-color);
 }
 .footer .right-control .translate-switch {
+  flex: 0 0 32px;
   border-radius: 10px;
   display: flex;
+  align-items: center;
+  justify-content: center;
   cursor: pointer;
   -webkit-app-region: no-drag;
-
-  height: 0px;
-  box-sizing: border-box;
-  width: 0px;
-  transition: 0.3s;
-  overflow: hidden;
-  margin: 0;
-  padding: 0;
-}
-.footer .right-control .translate-switch.slidedown {
-  padding: 7px;
-  margin-right: 32px;
-  height: 35px;
+  padding: 6px;
+  margin-right: 18px;
+  height: 32px;
   box-sizing: border-box;
   width: 32px;
+  color: var(--text-default-color);
+  transition: 0.3s;
+  overflow: visible;
+}
+.footer .right-control .translate-switch svg {
+  flex: 0 0 20px;
+  width: 20px;
+  height: 20px;
+  display: block;
+  color: inherit;
+  fill: currentColor;
 }
 .footer .right-control .translate-switch:hover {
   background-color: var(--songlist-hover-background-color);
@@ -2482,9 +2502,6 @@ svg.searchspinner {
   display: flex;
   transition: 0.3s;
   border-radius: 50%;
-}
-.footer .right-control .mask.slidedown {
-  transform: rotate(180deg);
 }
 .footer .right-control .mask:hover {
   background-color: var(--songlist-hover-background-color);

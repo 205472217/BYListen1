@@ -139,6 +139,24 @@ const main = () => {
     });
   });
 
+  app.directive('onContextMenu', () => ({
+    restrict: 'A',
+    link: (scope, element, attrs) => {
+      const handleContextMenu = (event) => {
+        const handled = scope.$apply(() =>
+          scope.$eval(attrs.onContextMenu, { $event: event })
+        );
+        if (handled !== false) {
+          event.preventDefault();
+        }
+      };
+      element.on('contextmenu', handleContextMenu);
+      scope.$on('$destroy', () => {
+        element.off('contextmenu', handleContextMenu);
+      });
+    },
+  }));
+
   app.directive('pagination', () => ({
     restrict: 'EA',
     replace: false,

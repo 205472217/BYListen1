@@ -1853,6 +1853,7 @@
                                   <p
                                     ng-repeat="line in lyricArray track by $index"
                                     data-line="{{line.lineNumber}}"
+                                    on-context-menu="showLyricContextMenu(line)"
                                     ng-class="{ 'highlight': (line.lineNumber == lyricLineNumber) || (line.lineNumber == lyricLineNumberTrans) , hide: (line.translationFlag && !enableLyricTranslation), translate: line.translationFlag}"
                                   >
                                     {{ line.content }}
@@ -4011,6 +4012,7 @@
                         <p
                           ng-repeat="line in lyricArray track by $index"
                           data-line="{{line.lineNumber}}"
+                          on-context-menu="showLyricContextMenu(line)"
                           ng-class="{ 'highlight': (line.lineNumber == lyricLineNumber) || (line.lineNumber == lyricLineNumberTrans) , hide: (line.translationFlag && !enableLyricTranslation), translate: line.translationFlag}"
                         >
                           {{ line.content }}

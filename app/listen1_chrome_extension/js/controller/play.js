@@ -467,6 +467,7 @@ angular.module('listenone').controller('PlayController', [
                 (timeRegResult[3]
                   ? parseInt(rightPadding(timeRegResult[3], 3, '0'), 10)
                   : 0), // microsec
+              hasTimestamp: true,
               translationFlag,
               index,
             });
@@ -500,6 +501,7 @@ angular.module('listenone').controller('PlayController', [
           .map((line, index) => ({
             content: line,
             seconds: 0,
+            hasTimestamp: false,
             translationFlag: false,
             index,
           }));
@@ -663,6 +665,45 @@ angular.module('listenone').controller('PlayController', [
           });
         });
       });
+    };
+
+    $scope.showLyricContextMenu = (line) => {
+      if (
+        !isElectron() ||
+        !isLocalMusicTrack($scope.currentPlaying) ||
+        !$scope.canAdjustLyricTime() ||
+        !line ||
+        line.hasTimestamp !== true
+      ) {
+        return false;
+      }
+
+      const trackId = $scope.currentPlaying.id;
+      const sourceIndex = $scope.lyricSourceSelection.index;
+      const { ipcRenderer } = require('electron');
+      ipcRenderer.invoke('showLyricContextMenu').then((selected) => {
+        if (!selected) {
+          return;
+        }
+        if (
+          !$scope.currentPlaying ||
+          $scope.currentPlaying.id !== trackId ||
+          $scope.lyricSourceSelection.index !== sourceIndex ||
+          !$scope.canAdjustLyricTime()
+        ) {
+          return;
+        }
+        const currentPositionSeconds =
+          l1Player.status.playing && l1Player.status.playing.pos;
+        if (!Number.isFinite(currentPositionSeconds)) {
+          return;
+        }
+        const currentPositionMilliseconds = Math.round(
+          currentPositionSeconds * 1000
+        );
+        $scope.adjustLyricTime(currentPositionMilliseconds - line.seconds);
+      });
+      return true;
     };
 
     function updateLyricPosition(currentSeconds) {

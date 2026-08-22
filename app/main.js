@@ -35,6 +35,35 @@ ipcMain.on("logLocalMusic", (event, arg) => {
   }
 });
 
+ipcMain.handle("showLyricContextMenu", (event) =>
+  new Promise((resolve) => {
+    const senderWindow = BrowserWindow.fromWebContents(event.sender);
+    if (!senderWindow) {
+      resolve(false);
+      return;
+    }
+
+    let selected = false;
+    const contextMenu = Menu.buildFromTemplate([
+      {
+        label: "此位置同步当前进度",
+        click() {
+          selected = true;
+          resolve(true);
+        },
+      },
+    ]);
+    contextMenu.popup({
+      window: senderWindow,
+      callback() {
+        if (!selected) {
+          resolve(false);
+        }
+      },
+    });
+  })
+);
+
 const store = new Store();
 const iconPath = join(__dirname, "/listen1_chrome_extension/images/logo.png");
 

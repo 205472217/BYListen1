@@ -1678,10 +1678,6 @@ svg.searchspinner {
   transition: 0.5s;
   opacity: 1;
 }
-.footer .left-control.slidedown {
-  opacity: 0;
-  pointer-events: none;
-}
 .footer .left-control .icon {
   display: flex;
   font-size: 22px;

@@ -171,9 +171,9 @@ svg {
   height: 46px;
   flex: 0 0 46px;
   border-bottom: solid 1px var(--line-default-color);
+  width: 200px;
   display: flex;
   align-items: center;
-  -webkit-app-region: drag;
 }
 
 .main .content .browser {
@@ -848,6 +848,9 @@ ul.detail-songlist .playlist-search {
   position: absolute;
   right: 0;
   top: -30px;
+  width: 200px;
+  display: flex;
+  align-items: center;
 }
 ul.detail-songlist .playlist-search .playlist-search-icon {
   width: 14px;
@@ -876,6 +879,36 @@ ul.detail-songlist .playlist-search .playlist-search-input:hover {
 }
 ul.detail-songlist .playlist-search .playlist-search-input::placeholder {
   color: #bbbbbb;
+}
+/* 排序按钮：与歌单搜索框同一行，靠左显示 */
+ul.detail-songlist .playlist-sort {
+  position: absolute;
+  left: 25px;
+  top: -30px;
+  display: flex;
+  align-items: center;
+}
+ul.detail-songlist .playlist-sort-button {
+  box-sizing: border-box;
+  height: 32px;
+  line-height: 30px;
+  padding: 0 12px;
+  margin-right: 10px;
+  background: transparent;
+  border: solid 1px var(--button-border-color);
+  border-radius: var(--default-border-radius);
+  cursor: pointer;
+  font-size: 13px;
+  color: var(--text-default-color);
+  transition: all 0.3s;
+}
+ul.detail-songlist .playlist-sort-button:hover {
+  background: var(--button-hover-background-color);
+}
+ul.detail-songlist .playlist-sort-button.active {
+  color: var(--theme-color, #017afe);
+  border-color: var(--theme-color, #017afe);
+  background: rgba(1, 122, 254, 0.1);
 }
 
 ul.detail-songlist li {

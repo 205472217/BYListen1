@@ -1179,7 +1179,8 @@ ul.detail-songlist .playlist-search {
   top: -50px;
 
   display: flex;
-  width: 200px;
+  width: auto;
+  min-width: 200px;
   height: 32px;
   background: var(--songlist-odd-background-color);
   border-style: none;
@@ -1206,6 +1207,36 @@ ul.detail-songlist .playlist-search .playlist-search-input {
   font-size: 16px;
   font-weight: 600;
   color: var(--text-default-color);
+}
+/* 排序按钮：与歌单搜索框同一行，靠左显示 */
+ul.detail-songlist .playlist-sort {
+  position: absolute;
+  left: 0;
+  top: -50px;
+  display: flex;
+  align-items: center;
+}
+ul.detail-songlist .playlist-sort-button {
+  box-sizing: border-box;
+  height: 32px;
+  line-height: 30px;
+  padding: 0 16px;
+  margin-right: 12px;
+  background: transparent;
+  border: solid 1px var(--button-border-color);
+  border-radius: var(--default-border-radius);
+  cursor: pointer;
+  font-size: 14px;
+  color: var(--text-default-color);
+  transition: all 0.3s;
+}
+ul.detail-songlist .playlist-sort-button:hover {
+  background: var(--button-hover-background-color);
+}
+ul.detail-songlist .playlist-sort-button.active {
+  color: var(--theme-color);
+  border-color: var(--theme-color);
+  background: var(--theme-color-hover);
 }
 ul.detail-songlist .playlist-search:hover,
 ul.detail-songlist .playlist-search:active {

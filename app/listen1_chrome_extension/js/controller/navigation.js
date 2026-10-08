@@ -103,6 +103,7 @@ angular.module('listenone').controller('NavigationController', [
         $scope.window_type = 'track';
         return;
       }
+      $scope.clearSort();
       const listId = new URL(url, window.location).searchParams.get('list_id');
       MediaService.getPlaylist(listId).success((data) => {
         $scope.songs = data.tracks;
@@ -175,6 +176,7 @@ angular.module('listenone').controller('NavigationController', [
 
     $scope.showPlaylist = (list_id, useCache) => {
       $scope.clearFilter();
+      $scope.clearSort();
       const url = `/playlist?list_id=${list_id}`;
       // save current scrolltop
       const offset = document.getElementsByClassName('browser')[0].scrollTop;
@@ -333,9 +335,80 @@ angular.module('listenone').controller('NavigationController', [
       }
     };
     $scope.playlistFilter = { key: '' };
+    $scope.playlistSort = { key: '', reverse: false };
 
     $scope.clearFilter = () => {
       $scope.playlistFilter.key = '';
+    };
+
+    $scope.clearSort = () => {
+      $scope.playlistSort.key = '';
+      $scope.playlistSort.reverse = false;
+    };
+
+    // 循环切换：升序 -> 倒序 -> 恢复原序
+    $scope.sortBy = (key) => {
+      if ($scope.playlistSort.key !== key) {
+        $scope.playlistSort.key = key;
+        $scope.playlistSort.reverse = false;
+      } else if (!$scope.playlistSort.reverse) {
+        $scope.playlistSort.reverse = true;
+      } else {
+        $scope.clearSort();
+      }
+    };
+
+    // 排序按钮文案，整段返回，避免在按钮内嵌套不同样式的标签
+    $scope.sortLabel = (key, name) => {
+      if ($scope.playlistSort.key !== key) {
+        return name;
+      }
+      return $scope.playlistSort.reverse ? `${name}降序` : `${name}升序`;
+    };
+
+    const comparePlaylistSong = (a, b, key) =>
+      String(a[key] || '').localeCompare(String(b[key] || ''), 'zh-Hans-CN', {
+        numeric: true,
+        sensitivity: 'base',
+      });
+
+    let playlistSongsCache = null;
+    $scope.playlistSongs = () => {
+      const songs = $scope.songs || [];
+      const searchKey = $scope.playlistFilter.key;
+      const sortKey = $scope.playlistSort.key;
+      const reverse = $scope.playlistSort.reverse;
+
+      if (sortKey === '') {
+        playlistSongsCache = null;
+        return songs.filter((song) => $scope.fieldFilter(song));
+      }
+
+      if (
+        playlistSongsCache !== null &&
+        playlistSongsCache.songs === songs &&
+        playlistSongsCache.size === songs.length &&
+        playlistSongsCache.searchKey === searchKey &&
+        playlistSongsCache.sortKey === sortKey &&
+        playlistSongsCache.reverse === reverse
+      ) {
+        return playlistSongsCache.list;
+      }
+
+      const list = songs
+        .filter((song) => $scope.fieldFilter(song))
+        .sort(
+          (a, b) => (reverse ? -1 : 1) * comparePlaylistSong(a, b, sortKey)
+        );
+      playlistSongsCache = {
+        songs,
+        size: songs.length,
+        searchKey,
+        sortKey,
+        reverse,
+        list,
+      };
+      return list;
     };
     $scope.fieldFilter = (song) => {
       const key = $scope.playlistFilter.key;

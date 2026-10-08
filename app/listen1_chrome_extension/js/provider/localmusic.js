@@ -59,7 +59,11 @@ class localmusic {
         let playlist = localStorage.getObject(list_id);
 
         if (playlist === null || playlist === undefined) {
-          playlist = defaultLocalMusicPlaylist;
+          playlist = JSON.parse(JSON.stringify(defaultLocalMusicPlaylist));
+          playlist.info.id = list_id;
+          if (list_id === 'lmplaylist_downloaded') {
+            playlist.info.title = '已下载';
+          }
         }
         localmusic.lm_apply_default_covers(playlist);
         fn(playlist);
@@ -555,7 +559,10 @@ class localmusic {
 
     return {
       success: (fn) => {
-        let playlist = localStorage.getObject('lmplaylist_reserve');
+        const playlistId = track_id.startsWith('lmtrack_downloaded_')
+          ? 'lmplaylist_downloaded'
+          : 'lmplaylist_reserve';
+        let playlist = localStorage.getObject(playlistId);
         let track =
           playlist &&
           Array.isArray(playlist.tracks) &&
@@ -575,7 +582,7 @@ class localmusic {
 
         if (!track.lyric_cache) {
           track.lyric_cache = localmusic.lm_create_lyric_cache();
-          localStorage.setObject('lmplaylist_reserve', playlist);
+          localStorage.setObject(playlistId, playlist);
         }
 
         const selectedIndex = refresh
@@ -603,9 +610,7 @@ class localmusic {
           }
           return localmusic.lm_fetch_cover_for_track(track).then((img_url) => {
             if (img_url) {
-              const latestPlaylist = localStorage.getObject(
-                'lmplaylist_reserve'
-              );
+              const latestPlaylist = localStorage.getObject(playlistId);
               const latestTrack =
                 latestPlaylist &&
                 Array.isArray(latestPlaylist.tracks) &&
@@ -616,7 +621,7 @@ class localmusic {
               ) {
                 latestTrack.img_url = img_url;
                 localmusic.lm_update_playlist_cover(latestPlaylist, img_url);
-                localStorage.setObject('lmplaylist_reserve', latestPlaylist);
+                localStorage.setObject(playlistId, latestPlaylist);
               }
             }
             return respondWithCache(img_url);
@@ -644,7 +649,7 @@ class localmusic {
 
         Promise.all([lyricRequest, coverRequest]).then(
           ([lyricResult, img_url]) => {
-            playlist = localStorage.getObject('lmplaylist_reserve');
+            playlist = localStorage.getObject(playlistId);
             track =
               playlist &&
               Array.isArray(playlist.tracks) &&
@@ -685,7 +690,7 @@ class localmusic {
               track.img_url = img_url;
             }
             localmusic.lm_update_playlist_cover(playlist, track.img_url);
-            localStorage.setObject('lmplaylist_reserve', playlist);
+            localStorage.setObject(playlistId, playlist);
 
             const activeSource = track.lyric_cache.sources[
               track.lyric_cache.selected_index

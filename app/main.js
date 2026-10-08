@@ -5,6 +5,7 @@ const {
   globalShortcut,
   ipcMain,
   Menu,
+  net,
   session,
   screen,
   Tray,
@@ -12,8 +13,18 @@ const {
 const Store = require("electron-store");
 const { autoUpdater } = require("electron-updater");
 const remoteMain = require("@electron/remote/main");
-const { join } = require("path");
-const { existsSync, mkdirSync, appendFileSync } = require("fs");
+const { spawn } = require("child_process");
+const { join, dirname, resolve } = require("path");
+const {
+  existsSync,
+  mkdirSync,
+  appendFileSync,
+  createWriteStream,
+  unlink,
+  rename,
+  stat,
+} = require("fs");
+const { pathToFileURL } = require("url");
 
 // simple per-day log file next to the executable
 function writeLog(type, message) {
@@ -66,6 +77,281 @@ ipcMain.handle("showLyricContextMenu", (event) =>
 
 const store = new Store();
 const iconPath = join(__dirname, "/listen1_chrome_extension/images/logo.png");
+const mediaRequestHeaders = new Map();
+
+function normalizeRequestHeaders(headers) {
+  if (!headers) return {};
+  if (Array.isArray(headers)) {
+    return headers.reduce((result, header) => {
+      if (header && header.name && header.value) {
+        result[header.name] = header.value;
+      }
+      return result;
+    }, {});
+  }
+  return { ...headers };
+}
+
+function rememberMediaRequest(url, headers) {
+  const normalized = normalizeRequestHeaders(headers);
+  delete normalized.Range;
+  delete normalized.range;
+  delete normalized["If-Range"];
+  delete normalized["if-range"];
+  mediaRequestHeaders.set(url, normalized);
+  if (mediaRequestHeaders.size > 300) {
+    mediaRequestHeaders.delete(mediaRequestHeaders.keys().next().value);
+  }
+}
+
+function getRememberedMediaHeaders(url) {
+  const exact = mediaRequestHeaders.get(url);
+  if (exact) return exact;
+  try {
+    const targetHost = new URL(url).host;
+    const entries = Array.from(mediaRequestHeaders.entries()).reverse();
+    const match = entries.find(([requestUrl]) => {
+      try {
+        return new URL(requestUrl).host === targetHost;
+      } catch (error) {
+        return false;
+      }
+    });
+    return match ? match[1] : {};
+  } catch (error) {
+    return {};
+  }
+}
+
+function getPlatformDownloadHeaders(track) {
+  const headers = {
+    "User-Agent":
+      "Mozilla/5.0 (Macintosh; Intel Mac OS X 10_14_2) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/72.0.3626.119 Safari/537.36",
+  };
+  switch (track.platform || track.source) {
+    case "netease":
+      headers.Referer = "http://music.163.com/";
+      break;
+    case "qq":
+      headers.Referer = "https://y.qq.com/";
+      headers.Origin = "https://y.qq.com";
+      break;
+    case "kugou":
+      headers.Referer = "https://www.kugou.com/";
+      headers["User-Agent"] = MOBILE_UA;
+      break;
+    case "kuwo":
+      headers.Referer = "http://www.kuwo.cn/";
+      break;
+    case "bilibili":
+      headers.Referer = "https://www.bilibili.com/";
+      break;
+    case "migu":
+      headers.Referer = "http://music.migu.cn/v3/music/player/audio?from=migu";
+      break;
+    default:
+      break;
+  }
+  return headers;
+}
+
+function getDefaultDownloadPath() {
+  const basePath = app.isPackaged ? dirname(process.execPath) : join(__dirname, "..");
+  return join(basePath, "download");
+}
+
+function getDownloadPath() {
+  return store.get("downloadPath") || getDefaultDownloadPath();
+}
+
+function ensureDirectory(directory) {
+  mkdirSync(directory, { recursive: true });
+  return directory;
+}
+
+function sanitizeFileName(value) {
+  return String(value || "")
+    .replace(/[<>:"/\\|?*\x00-\x1F]/g, "_")
+    .replace(/[. ]+$/g, "")
+    .trim()
+    .slice(0, 160);
+}
+
+function getFfmpegPath() {
+  const fileName = process.platform === "win32" ? "ffmpeg.exe" : "ffmpeg";
+  const candidates = [
+    process.env.LISTEN1_FFMPEG_PATH,
+    app.isPackaged ? join(dirname(process.execPath), fileName) : null,
+    app.isPackaged ? join(dirname(process.execPath), "resources", fileName) : null,
+    join(__dirname, "..", "ffmpeg", fileName),
+    join(__dirname, "..", "build", fileName),
+  ].filter(Boolean);
+  return candidates.find((candidate) => existsSync(candidate)) || fileName;
+}
+
+function unlinkFile(filePath) {
+  return new Promise((resolvePromise) => {
+    unlink(filePath, () => resolvePromise());
+  });
+}
+
+function renameFile(source, target) {
+  return new Promise((resolvePromise, rejectPromise) => {
+    rename(source, target, (error) => {
+      if (error) rejectPromise(error);
+      else resolvePromise();
+    });
+  });
+}
+
+function getFileSize(filePath) {
+  return new Promise((resolvePromise, rejectPromise) => {
+    stat(filePath, (error, fileStat) => {
+      if (error) rejectPromise(error);
+      else resolvePromise(fileStat.size);
+    });
+  });
+}
+
+function sendDownloadProgress(event, trackId, progress) {
+  if (!event.sender.isDestroyed()) {
+    event.sender.send("downloadProgress", { trackId, progress });
+  }
+}
+
+function downloadMedia(event, track, temporaryPath) {
+  return new Promise((resolvePromise, rejectPromise) => {
+    const playbackHeaders = getRememberedMediaHeaders(track.url);
+    const request = net.request({
+      url: track.url,
+      method: "GET",
+      session: event.sender.session,
+      credentials: "include",
+      cache: "force-cache",
+      redirect: "follow",
+      headers: {
+        ...getPlatformDownloadHeaders(track),
+        ...playbackHeaders,
+        Range: "bytes=0-",
+      },
+    });
+    request.on("response", (response) => {
+      if (response.statusCode < 200 || response.statusCode >= 300) {
+        response.resume();
+        rejectPromise(new Error(`媒体请求失败: HTTP ${response.statusCode}`));
+        return;
+      }
+      const lengthHeader = response.headers["content-length"];
+      const contentLength = Number(
+        Array.isArray(lengthHeader) ? lengthHeader[0] : lengthHeader || 0
+      );
+      let received = 0;
+      const writer = createWriteStream(temporaryPath);
+      let settled = false;
+      const fail = (error) => {
+        if (settled) return;
+        settled = true;
+        writer.destroy();
+        rejectPromise(error);
+      };
+      writer.on("error", fail);
+      response.on("data", (chunk) => {
+        received += chunk.length;
+        if (contentLength > 0) {
+          sendDownloadProgress(event, track.id, received / contentLength);
+        }
+      });
+      response.on("error", fail);
+      response.pipe(writer);
+      writer.on("finish", () => {
+        if (settled) return;
+        settled = true;
+        sendDownloadProgress(event, track.id, 1);
+        resolvePromise();
+      });
+    });
+    request.on("error", rejectPromise);
+    request.end();
+  });
+}
+
+function transcodeToMp3(inputPath, outputPath, track) {
+  return new Promise((resolvePromise, rejectPromise) => {
+    const args = [
+      "-y", "-i", inputPath, "-vn", "-codec:a", "libmp3lame", "-b:a", "320k",
+      "-id3v2_version", "3",
+    ];
+    [["title", track.title], ["artist", track.artist], ["album", track.album]].forEach(
+      ([key, value]) => {
+        if (value) args.push("-metadata", `${key}=${value}`);
+      }
+    );
+    args.push(outputPath);
+    const ffmpeg = spawn(getFfmpegPath(), args, { windowsHide: true });
+    let errorOutput = "";
+    ffmpeg.stderr.on("data", (chunk) => {
+      errorOutput += chunk.toString();
+    });
+    ffmpeg.on("error", rejectPromise);
+    ffmpeg.on("close", (code) => {
+      if (code === 0) resolvePromise();
+      else rejectPromise(new Error(errorOutput.trim() || `FFmpeg 退出码: ${code}`));
+    });
+  });
+}
+
+ipcMain.handle("getDownloadPath", () => ensureDirectory(getDownloadPath()));
+
+ipcMain.handle("chooseDownloadPath", async () => {
+  const result = await electron.dialog.showOpenDialog({
+    title: "选择下载目录",
+    defaultPath: getDownloadPath(),
+    properties: ["openDirectory", "createDirectory"],
+  });
+  if (result.canceled || result.filePaths.length === 0) return getDownloadPath();
+  const selectedPath = resolve(result.filePaths[0]);
+  ensureDirectory(selectedPath);
+  store.set("downloadPath", selectedPath);
+  return selectedPath;
+});
+
+ipcMain.handle("downloadMusic", async (event, track) => {
+  if (!track || typeof track.url !== "string") {
+    return { success: false, error: "当前歌曲还没有可用的音频地址" };
+  }
+  let mediaUrl;
+  try {
+    mediaUrl = new URL(track.url);
+  } catch (error) {
+    return { success: false, error: "音频地址无效" };
+  }
+  if (!["http:", "https:"].includes(mediaUrl.protocol)) {
+    return { success: false, error: "只支持下载在线音乐" };
+  }
+  const directory = ensureDirectory(getDownloadPath());
+  const title = sanitizeFileName(track.title) || "未命名歌曲";
+  const artist = sanitizeFileName(track.artist);
+  const fileName = `${artist ? `${artist} - ` : ""}${title}.mp3`;
+  const outputPath = join(directory, fileName);
+  if (existsSync(outputPath) && (await getFileSize(outputPath)) > 0) {
+    return { success: true, cached: true, path: outputPath, fileUrl: pathToFileURL(outputPath).href };
+  }
+  const suffix = Date.now();
+  const temporaryInput = join(directory, `.${fileName}.${suffix}.source`);
+  const temporaryOutput = join(directory, `.${fileName}.${suffix}.mp3`);
+  try {
+    await downloadMedia(event, track, temporaryInput);
+    await transcodeToMp3(temporaryInput, temporaryOutput, track);
+    await renameFile(temporaryOutput, outputPath);
+    return { success: true, cached: false, path: outputPath, fileUrl: pathToFileURL(outputPath).href };
+  } catch (error) {
+    return { success: false, error: error.message || "下载失败" };
+  } finally {
+    await unlinkFile(temporaryInput);
+    await unlinkFile(temporaryOutput);
+  }
+});
+
 
 autoUpdater.checkForUpdatesAndNotify();
 
@@ -337,21 +623,7 @@ const setThumbbarPlay = () => {
 
 function createWindow() {
   const filter = {
-    urls: [
-      "*://*.music.163.com/*",
-      "*://music.163.com/*",
-      "*://*.xiami.com/*",
-      "*://i.y.qq.com/*",
-      "*://c.y.qq.com/*",
-      "*://*.kugou.com/*",
-      "*://*.kuwo.cn/*",
-      "*://*.bilibili.com/*",
-      "*://*.bilivideo.com/*",
-      "*://*.bilivideo.cn/*",
-      "*://*.migu.cn/*",
-      "*://*.githubusercontent.com/*",
-      "https://listen1.github.io/listen1/callback.html?code=*",
-    ],
+    urls: ["http://*/*", "https://*/*"],
   };
 
   session.defaultSession.webRequest.onBeforeSendHeaders(
@@ -369,6 +641,13 @@ function createWindow() {
         );
       } else {
         hack_referer_header(details);
+        if (
+          details.resourceType === "media" ||
+          /\.(mp3|m4a|aac|flac|ogg|wav|webm)(?:\?|$)/i.test(details.url) ||
+          details.url.includes("bilivideo")
+        ) {
+          rememberMediaRequest(details.url, details.requestHeaders);
+        }
       }
       callback({ cancel: false, requestHeaders: details.requestHeaders });
     }

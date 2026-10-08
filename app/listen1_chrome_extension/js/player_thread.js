@@ -245,10 +245,11 @@
         (bootinfo) => {
           msg.type = 'BG_PLAYER:RETRIEVE_URL_SUCCESS';
 
-          msg.data = { ...msg.data, ...bootinfo };
+          msg.data = { ...msg.data, ...bootinfo, downloadUrl: bootinfo.url };
 
           this.playlist[index].bitrate = bootinfo.bitrate;
           this.playlist[index].platform = bootinfo.platform;
+          this.playlist[index].downloadUrl = bootinfo.url;
 
           this.setMediaURI(msg.data.url, msg.data.id);
           this.setAudioDisabled(false, msg.data.index);

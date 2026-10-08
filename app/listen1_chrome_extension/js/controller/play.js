@@ -74,9 +74,145 @@ angular.module('listenone').controller('PlayController', [
     $scope.lyricSourceLoadingIndex = null;
     $scope.lastTrackId = null;
 
+    $scope.downloadState = 'idle';
+    $scope.downloadProgress = 0;
+
+    $scope.downloadCurrentTrack = () => {
+      if (!isElectron()) {
+        notyf.error('下载功能仅支持桌面版');
+        return;
+      }
+      if (!$scope.currentPlaying) {
+        notyf.error('请先播放一首在线歌曲');
+        return;
+      }
+      if ($scope.downloadState === 'downloading') {
+        notyf.info('下载任务正在进行中');
+        return;
+      }
+      const { ipcRenderer } = require('electron');
+      const track = { ...$scope.currentPlaying };
+      const mediaUrl = track.downloadUrl || track.url;
+      if (mediaUrl) {
+        track.url = mediaUrl;
+        startTrackDownload(track, ipcRenderer);
+        return;
+      }
+
+      $scope.downloadState = 'resolving';
+      $scope.downloadProgress = 0;
+      $scope.$evalAsync();
+      notyf.info('正在获取歌曲地址…', true);
+      let completed = false;
+      const resolveTimer = setTimeout(() => {
+        if (completed) return;
+        completed = true;
+        $scope.downloadState = 'error';
+        $scope.$evalAsync();
+        notyf.error('获取歌曲地址超时，请稍后重试');
+      }, 20000);
+      const failResolution = (message) => {
+        if (completed) return;
+        completed = true;
+        clearTimeout(resolveTimer);
+        $scope.downloadState = 'error';
+        $scope.$evalAsync();
+        notyf.error(message);
+      };
+      try {
+        MediaService.bootstrapTrack(
+          track,
+          (bootinfo) => {
+            if (completed) return;
+            if (!bootinfo || !bootinfo.url) {
+              failResolution('该歌曲没有可下载的音频地址');
+              return;
+            }
+            completed = true;
+            clearTimeout(resolveTimer);
+            track.url = bootinfo.url;
+            track.downloadUrl = bootinfo.url;
+            track.platform = bootinfo.platform || track.platform;
+            startTrackDownload(track, ipcRenderer);
+          },
+          () => failResolution('获取歌曲地址失败，请稍后重试')
+        );
+      } catch (error) {
+        failResolution(error.message || '获取歌曲地址失败');
+      }
+    };
+
+    function startTrackDownload(track, ipcRenderer) {
+      $scope.downloadState = 'downloading';
+      $scope.downloadProgress = 0;
+      $scope.$evalAsync();
+      notyf.info('正在下载并转换为 MP3，请稍候', true);
+      ipcRenderer.invoke('downloadMusic', track).then((result) => {
+        if (!result || !result.success) {
+          $scope.downloadState = 'error';
+          notyf.error((result && result.error) || '下载失败');
+          return;
+        }
+        $scope.downloadState = 'success';
+        const downloadedTrack = {
+          ...track,
+          id: `lmtrack_downloaded_${track.id}`,
+          source: 'localmusic',
+          platform: 'localmusic',
+          source_url: track.source_url || '',
+          sound_url: result.fileUrl,
+          url: undefined,
+          downloadUrl: undefined,
+        };
+        const playlist = localStorage.getObject('lmplaylist_downloaded') || {
+          tracks: [],
+          info: {
+            id: 'lmplaylist_downloaded',
+            title: '已下载',
+            cover_img_url: 'images/mycover.jpg',
+            source_url: '',
+          },
+        };
+        playlist.tracks = [
+          downloadedTrack,
+          ...playlist.tracks.filter((item) => item.id !== downloadedTrack.id),
+        ];
+        localStorage.setObject('lmplaylist_downloaded', playlist);
+        notyf.success(result.cached ? '歌曲已在已下载列表中' : '下载成功');
+        $rootScope.$broadcast('downloaded:update');
+      }).catch((error) => {
+        $scope.downloadState = 'error';
+        notyf.error(error.message || '下载失败');
+      }).finally(() => {
+        $scope.$evalAsync();
+      });
+    }
+
+    if (isElectron()) {
+      const { ipcRenderer } = require('electron');
+      ipcRenderer.on('downloadProgress', (event, data) => {
+        if ($scope.currentPlaying && data.trackId === $scope.currentPlaying.id) {
+          $scope.$evalAsync(() => {
+            $scope.downloadProgress = Math.round(data.progress * 100);
+          });
+        }
+      });
+    }
+
+    $scope.chooseDownloadPath = () => {
+      if (!isElectron()) return;
+      const { ipcRenderer } = require('electron');
+      ipcRenderer.invoke('chooseDownloadPath').then((path) => {
+        $scope.$evalAsync(() => {
+          $scope.downloadPath = path;
+        });
+      });
+    };
+
     $scope.enableGloablShortcut = false;
     $scope.isChrome = !isElectron();
     $scope.isMac = false;
+
 
     $scope.currentDuration = '0:00';
     $scope.currentDurationSeconds = 0;
@@ -168,6 +304,14 @@ angular.module('listenone').controller('PlayController', [
         $scope.saveLocalSettings();
       } else {
         l1Player.setVolume($scope.volume);
+      }
+      if (isElectron()) {
+        const { ipcRenderer } = require('electron');
+        ipcRenderer.invoke('getDownloadPath').then((path) => {
+          $scope.$evalAsync(() => {
+            $scope.downloadPath = path;
+          });
+        });
       }
       $scope.enableGlobalShortCut = localStorage.getObject(
         'enable_global_shortcut'
@@ -822,6 +966,8 @@ angular.module('listenone').controller('PlayController', [
 
           case 'LOAD': {
             $scope.currentPlaying = msg.data.currentPlaying;
+            $scope.downloadState = 'idle';
+            $scope.downloadProgress = 0;
             $scope.currentPlaying.img_url = getTrackCover(
               $scope.currentPlaying
             );

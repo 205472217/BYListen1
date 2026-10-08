@@ -1011,6 +1011,32 @@ ul.detail-songlist li .desc div.title:hover{
   opacity: 0.35;
   cursor: default;
 }
+.playsong-detail .detail-songinfo .download-mp3-button {
+  min-width: 104px;
+  margin: 8px 0;
+  padding: 7px 12px;
+  border: 1px solid var(--theme-color);
+  border-radius: 6px;
+  color: var(--theme-color);
+  background: transparent;
+  cursor: pointer;
+  transition: background-color 140ms ease, color 140ms ease, transform 100ms ease, box-shadow 140ms ease;
+  -webkit-app-region: no-drag;
+}
+.playsong-detail .detail-songinfo .download-mp3-button:hover:not(:disabled) {
+  color: var(--content-background-color);
+  background: var(--theme-color);
+  box-shadow: 0 3px 10px rgba(0, 0, 0, 0.2);
+  transform: translateY(-1px);
+}
+.playsong-detail .detail-songinfo .download-mp3-button:active:not(:disabled) {
+  box-shadow: none;
+  transform: translateY(1px) scale(0.96);
+}
+.playsong-detail .detail-songinfo .download-mp3-button:disabled {
+  opacity: 0.65;
+  cursor: progress;
+}
 .playsong-detail .detail-head-title {
   max-width: 54vh;
   margin-top: 24px;
@@ -1521,6 +1547,12 @@ ul.detail-songlist li .tools .icon {
 .page .settings-content button:hover {
   transform: scale(1.1);
   background: var(--button-hover-background-color);
+}
+.page .settings-content .shortcut-download {
+  display: flex;
+  margin-bottom: 25px;
+  justify-content: space-between;
+  align-items: center;
 }
 .page .settings-content .shortcut {
   display: flex;

@@ -398,6 +398,16 @@
                             </div>
                           </li>
                           <li
+                            ng-if="!isChrome"
+                            ng-click="showPlaylist('lmplaylist_downloaded')"
+                            ng-class="{ 'active':window_type=='list' && ( '/playlist?list_id=lmplaylist_downloaded' === getCurrentUrl() ) }"
+                          >
+                            <div class="sidebar-block">
+                              <span class="icon li-featured-list"></span
+                              ><a>已下载</a>
+                            </div>
+                          </li>
+                          <li
                             ng-if="is_login('netease')"
                             ng-click="showTag(6, {platform:'netease', user: musicAuth.netease});"
                             ng-class="{ 'active':(current_tag==6 && tag_params.platform=='netease') && (window_url_stack.length ==0) }"
@@ -927,6 +937,15 @@
                                   >
                                     Brazilian Portuguese
                                   </button>
+                                </div>
+                              </div>
+                              <div class="settings-title">
+                                <span>下载路径</span>
+                              </div>
+                              <div class="settings-content">
+                                <div class="shortcut shortcut-download">
+                                  <span>{{downloadPath || '加载中…'}}</span>
+                                  <button class="language-button" ng-click="chooseDownloadPath()">选择目录</button>
                                 </div>
                               </div>
                               <div class="settings-title">
@@ -1814,6 +1833,14 @@
                                     >
                                   </div>
                                 </div>
+                                <button
+                                  type="button"
+                                  class="download-mp3-button"
+                                  ng-if="!isChrome"
+                                  ng-click="downloadCurrentTrack()"
+                                  ng-disabled="downloadState === 'resolving' || downloadState === 'downloading'"
+                                  title="下载当前歌曲为 MP3"
+                                ><span ng-if="downloadState === 'idle' || downloadState === 'success' || downloadState === 'error'">下载 MP3</span><span ng-if="downloadState === 'resolving'">获取地址中…</span><span ng-if="downloadState === 'downloading'">下载中 {{downloadProgress}}%</span></button>
                                 <div class="local-lyric-sources" ng-if="currentPlaying.source === 'localmusic' || currentPlaying.platform === 'localmusic'">
                                   <button
                                     type="button"
@@ -2459,6 +2486,16 @@
                           </div>
                         </li>
                         <li
+                          ng-if="!isChrome"
+                          ng-click="showPlaylist('lmplaylist_downloaded')"
+                          ng-class="{ 'active':window_type=='list' && ( '/playlist?list_id=lmplaylist_downloaded' === getCurrentUrl() ) }"
+                        >
+                          <div ng-class="{'opensidebar':isOpenSidebar}" class="sidebar-block">
+                            <span class="icon li-featured-list"></span>
+                            <a>已下载</a>
+                          </div>
+                        </li>
+                        <li
                           ng-if="is_login('netease')"
                           ng-click="showTag(6, {platform:'netease', user: musicAuth.netease});"
                           ng-class="{ 'active':(current_tag==6 && tag_params.platform=='netease') && (window_url_stack.length ==0) }"
@@ -3038,6 +3075,15 @@
                                 >
                                   Korean
                                 </button>
+                              </div>
+                            </div>
+                            <div class="settings-title">
+                              <span>下载路径</span>
+                            </div>
+                            <div class="settings-content">
+                              <div class="shortcut shortcut-download">
+                                <span>{{downloadPath || '加载中…'}}</span>
+                                <button class="language-button" ng-click="chooseDownloadPath()">选择目录</button>
                               </div>
                             </div>
                             <div class="settings-title">
@@ -3972,6 +4018,14 @@
                       </div>
                     </div>
                     <div class="detail-songinfo">
+                      <button
+                        type="button"
+                        class="download-mp3-button"
+                        ng-if="!isChrome"
+                        ng-click="downloadCurrentTrack()"
+                        ng-disabled="downloadState === 'resolving' || downloadState === 'downloading'"
+                        title="下载当前歌曲为 MP3"
+                      ><span ng-if="downloadState === 'idle' || downloadState === 'success' || downloadState === 'error'">下载 MP3</span><span ng-if="downloadState === 'resolving'">获取地址中…</span><span ng-if="downloadState === 'downloading'">下载中 {{downloadProgress}}%</span></button>
                       <div class="local-lyric-sources" ng-if="currentPlaying.source === 'localmusic' || currentPlaying.platform === 'localmusic'">
                         <button
                           type="button"

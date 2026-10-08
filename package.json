@@ -36,6 +36,12 @@
     "appId": "com.listen1.listen1",
     "productName": "Listen1",
     "asar": true,
+    "extraFiles": [
+      {
+        "from": "ffmpeg/ffmpeg.exe",
+        "to": "ffmpeg.exe"
+      }
+    ],
     "artifactName": "${name}_${version}_${os}_${arch}.${ext}",
     "dmg": {
       "icon": "build/disk.icns",

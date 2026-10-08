@@ -20,6 +20,12 @@ if errorlevel 1 (
     exit /b 1
 )
 
+if not exist "ffmpeg\ffmpeg.exe" (
+    echo [ERROR] ffmpeg\ffmpeg.exe not found
+    pause
+    exit /b 1
+)
+
 echo.
 echo [1/2] Installing dependencies: npm install ...
 call npm install
@@ -37,6 +43,9 @@ if errorlevel 1 (
     pause
     exit /b 1
 )
+
+if exist "dist\win-unpacked" copy /Y "ffmpeg\ffmpeg.exe" "dist\win-unpacked\ffmpeg.exe" >nul
+copy /Y "ffmpeg\ffmpeg.exe" "dist\ffmpeg.exe" >nul
 
 echo.
 echo ============================================

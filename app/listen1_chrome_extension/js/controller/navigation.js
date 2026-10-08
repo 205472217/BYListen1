@@ -338,13 +338,14 @@ angular.module('listenone').controller('NavigationController', [
       $scope.playlistFilter.key = '';
     };
     $scope.fieldFilter = (song) => {
-      if ($scope.playlistFilter.key === '') {
+      const key = $scope.playlistFilter.key;
+      if (key === '') {
         return true;
       }
-      return (
-        song.title.includes($scope.playlistFilter.key) ||
-        song.artist.includes($scope.playlistFilter.key) ||
-        (song.album && song.album.includes($scope.playlistFilter.key))
+      return Boolean(
+        (song.title && song.title.includes(key)) ||
+          (song.artist && song.artist.includes(key)) ||
+          (song.album && song.album.includes(key))
       );
     };
     $scope.onPlaylistSongDrop = (list_id, song, data, dataType, direction) => {
@@ -678,13 +679,15 @@ angular.module('listenone').controller('NavigationController', [
 
             result.filePaths.forEach((fp) => {
               remoteFunctions.readAudioTags(fp).then((md) => {
+                const artist = md.common.artist || '';
+                const album = md.common.album || '';
                 const track = {
                   id: `lmtrack_${fp}`,
-                  title: md.common.title,
-                  artist: md.common.artist,
-                  artist_id: `lmartist_${md.common.artist}`,
-                  album: md.common.album,
-                  album_id: `lmalbum_${md.common.album}`,
+                  title: md.common.title || '',
+                  artist,
+                  artist_id: `lmartist_${artist}`,
+                  album,
+                  album_id: `lmalbum_${album}`,
                   source: 'localmusic',
                   source_url: '',
                   img_url: 'images/mycover.jpg',

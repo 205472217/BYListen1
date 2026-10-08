@@ -20,7 +20,7 @@ Listen 1 可以搜索和播放来自多个主流音乐网站的歌曲，让你�
 
 访问 github 主页下载安装包安装
 
-网址：https://listen1.github.io/listen1
+https://listen1.github.io/listen1
 
 ## 生成安装包
 

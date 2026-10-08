@@ -942,6 +942,11 @@ ul.detail-songlist li a {
 }
 ul.detail-songlist li a.disabled {
   color: var(--disable-song-title-color);
+  cursor: not-allowed;
+}
+ul.detail-songlist li a.disabled span.source {
+  color: var(--disable-song-title-color);
+  border-color: var(--disable-song-title-color);
 }
 ul.detail-songlist li a span.source {
   border: solid 1px #ccc;

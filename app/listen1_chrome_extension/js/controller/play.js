@@ -333,6 +333,10 @@ angular.module('listenone').controller('PlayController', [
         'auto_choose_source_list',
         ['kuwo', 'qq', 'migu']
       );
+      $scope.enablePlayablePrecheck = getLocalStorageValue(
+        'enable_playable_precheck',
+        true
+      );
       $scope.enableStopWhenClose =
         isElectron() || getLocalStorageValue('enable_stop_when_close', true);
       $scope.enableNowplayingCoverBackground = getLocalStorageValue(
@@ -1243,6 +1247,26 @@ angular.module('listenone').controller('PlayController', [
       localStorage.setObject(
         'enable_auto_choose_source',
         $scope.enableAutoChooseSource
+      );
+    };
+
+    $scope.setPlayablePrecheck = (toggle) => {
+      if (toggle === true) {
+        $scope.enablePlayablePrecheck = !$scope.enablePlayablePrecheck;
+      }
+      localStorage.setObject(
+        'enable_playable_precheck',
+        $scope.enablePlayablePrecheck
+      );
+      if (window.TrackAvailability) {
+        window.TrackAvailability.setEnabled($scope.enablePlayablePrecheck);
+        if ($scope.enablePlayablePrecheck) {
+          window.TrackAvailability.clearCache();
+        }
+      }
+      $rootScope.$broadcast(
+        'playable_precheck:changed',
+        $scope.enablePlayablePrecheck
       );
     };
 

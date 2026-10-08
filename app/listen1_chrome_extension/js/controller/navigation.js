@@ -73,6 +73,21 @@ angular.module('listenone').controller('NavigationController', [
       }
     });
 
+    // 可播放性预检开关变化时，重新检测当前歌单
+    $scope.$on('playable_precheck:changed', (event, enabled) => {
+      if (!window.TrackAvailability || !$scope.songs) {
+        return;
+      }
+      if (enabled) {
+        applyPlayablePrecheck($scope.songs);
+      } else {
+        $scope.songs.forEach((song) => {
+          song.disabled = false;
+          song.availability = undefined;
+        });
+      }
+    });
+
     // playlist window
     $scope.resetWindow = (offset) => {
       if (offset === undefined) {
@@ -98,6 +113,15 @@ angular.module('listenone').controller('NavigationController', [
       $scope.window_poped_url_stack = [];
     };
 
+    function applyPlayablePrecheck(tracks) {
+      if (!window.TrackAvailability) {
+        return;
+      }
+      window.TrackAvailability.scan(tracks, () => {
+        $scope.$evalAsync();
+      });
+    }
+
     function refreshWindow(url, offset = 0) {
       if (url === '/now_playing') {
         $scope.window_type = 'track';
@@ -107,6 +131,7 @@ angular.module('listenone').controller('NavigationController', [
       const listId = new URL(url, window.location).searchParams.get('list_id');
       MediaService.getPlaylist(listId).success((data) => {
         $scope.songs = data.tracks;
+        applyPlayablePrecheck($scope.songs);
         $scope.list_id = data.info.id;
         $scope.cover_img_url = data.info.cover_img_url;
         $scope.playlist_title = data.info.title;
@@ -201,6 +226,7 @@ angular.module('listenone').controller('NavigationController', [
           return;
         }
         $scope.songs = data.tracks;
+        applyPlayablePrecheck($scope.songs);
         $scope.cover_img_url = data.info.cover_img_url;
         $scope.playlist_title = data.info.title;
         $scope.playlist_source_url = data.info.source_url;
@@ -451,6 +477,11 @@ angular.module('listenone').controller('NavigationController', [
     };
 
     $scope.addAndPlay = (song) => {
+      // 预检判定为不可播放的曲目不允许点击播放
+      if (song && song.disabled) {
+        $scope.copyrightNotice();
+        return;
+      }
       l1Player.addTrack(song);
       l1Player.playById(song.id);
     };

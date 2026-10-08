@@ -108,6 +108,8 @@
  "_AUTO_CHOOSE_SOURCE": "Auto Choose Source",
  "_AUTO_CHOOSE_SOURCE_NOTICE": "Enable choose source from other music platform after fail.",
  "_AUTO_CHOOSE_SOURCE_LIST": "Music Platform to try after fail",
+ "_PLAYABLE_PRECHECK": "Playability Check",
+ "_PLAYABLE_PRECHECK_NOTICE": "Pre-check in background: unplayable songs are greyed out and not clickable",
  "_NOWPLAYING_DISPLAY": "Now Playing Display",
  "_NOWPLAYING_COVER_BACKGROUND_NOTICE": "Show Cover Image for Now Playing",
  "_NOWPLAYING_BITRATE_NOTICE": "Show Bitrate",

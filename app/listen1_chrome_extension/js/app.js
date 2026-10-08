@@ -202,6 +202,11 @@ const main = () => {
       },
       link(scope, element, attrs) {
         element.bind('click', (event) => {
+          // 预检判定为不可播放的曲目不允许点击播放
+          if (scope.song && scope.song.disabled) {
+            notyf.info(i18next.t('_COPYRIGHT_ISSUE'), true);
+            return;
+          }
           l1Player.addTrack(scope.song);
           l1Player.playById(scope.song.id);
         });

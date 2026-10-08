@@ -108,6 +108,8 @@
  "_AUTO_CHOOSE_SOURCE": "自动切换源",
  "_AUTO_CHOOSE_SOURCE_NOTICE": "是否自动切换播放源（仅在播放音乐失败后切换）",
  "_AUTO_CHOOSE_SOURCE_LIST": "从以下平台搜索可用源",
+ "_PLAYABLE_PRECHECK": "可播放性检测",
+ "_PLAYABLE_PRECHECK_NOTICE": "后台预检：不能播放的歌曲显示为灰色且不可点击",
  "_NOWPLAYING_DISPLAY": "正在播放显示",
  "_NOWPLAYING_COVER_BACKGROUND_NOTICE": "显示专辑封面作为背景",
  "_NOWPLAYING_BITRATE_NOTICE": "显示比特率",

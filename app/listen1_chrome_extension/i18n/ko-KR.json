@@ -108,6 +108,8 @@
   "_AUTO_CHOOSE_SOURCE": "소스 자동 선택",
   "_AUTO_CHOOSE_SOURCE_NOTICE": "재생 소스 자동 전환 여부 (음악 재생 실패 후에만 전환)",
   "_AUTO_CHOOSE_SOURCE_LIST": "실패 후 시도할 음악 플랫폼",
+  "_PLAYABLE_PRECHECK": "재생 가능 여부 검사",
+  "_PLAYABLE_PRECHECK_NOTICE": "백그라운드 사전 검사: 재생할 수 없는 곡은 회색으로 표시되며 클릭할 수 없습니다",
   "_NOWPLAYING_DISPLAY": "재생 중 표시",
   "_NOWPLAYING_COVER_BACKGROUND_NOTICE": "지금 재생 중인 커버 이미지 표시",
   "_NOWPLAYING_BITRATE_NOTICE": "비트 레이트 보이기",

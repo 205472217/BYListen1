@@ -350,9 +350,9 @@ const MediaService = {
   bootstrapTrack(track, playerSuccessCallback, playerFailCallback) {
     const successCallback = playerSuccessCallback;
     const sound = {};
-    function failureCallback() {
+    function failureCallback(reason) {
       if (localStorage.getObject('enable_auto_choose_source') === false) {
-        playerFailCallback();
+        playerFailCallback(reason);
         return;
       }
       const trackPlatform = getProviderNameByItemId(track.id);
@@ -403,7 +403,8 @@ const MediaService = {
       );
       // TODO: Use Promise.any() in ES2021 replace the tricky workaround
       Promise.all(getUrlPromises)
-        .then(playerFailCallback)
+        // 无法切换到其他源时，把失败原因（例如"接口限流、结果未确定"）透传给调用方
+        .then(() => playerFailCallback(reason))
         .catch((response) => {
           playerSuccessCallback(response);
         });

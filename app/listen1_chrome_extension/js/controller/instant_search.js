@@ -1,5 +1,5 @@
 /* eslint-disable no-param-reassign */
-/* global angular i18next MediaService sourceList */
+/* global angular i18next MediaService sourceList TrackAvailability */
 angular.module('listenone').controller('InstantSearchController', [
   '$scope',
   '$timeout',
@@ -58,6 +58,12 @@ angular.module('listenone').controller('InstantSearchController', [
           r.sourceName = i18next.t(r.source);
         });
         $scope.result = data.result;
+        // 后台预检可播放性：不能播放的曲目会被标记为 disabled（灰色、不可点击）
+        if (window.TrackAvailability) {
+          window.TrackAvailability.scan($scope.result, () => {
+            $scope.$evalAsync();
+          });
+        }
         updateTotalPage(data.total);
         $scope.loading = false;
         // scroll back to top when finish searching
@@ -95,6 +101,23 @@ angular.module('listenone').controller('InstantSearchController', [
     $scope.isActiveTab = (tab) => $scope.tab === tab;
 
     $scope.isSearchType = (searchType) => $scope.searchType === searchType;
+
+    // 可播放性预检开关变化时，重新检测当前搜索结果
+    $scope.$on('playable_precheck:changed', (event, enabled) => {
+      if (!window.TrackAvailability || !$scope.result) {
+        return;
+      }
+      if (enabled) {
+        window.TrackAvailability.scan($scope.result, () => {
+          $scope.$evalAsync();
+        });
+      } else {
+        $scope.result.forEach((song) => {
+          song.disabled = false;
+          song.availability = undefined;
+        });
+      }
+    });
 
     // eslint-disable-next-line consistent-return
     function renderSearchPage() {

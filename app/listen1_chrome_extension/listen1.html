@@ -1836,7 +1836,7 @@
                                 <button
                                   type="button"
                                   class="download-mp3-button"
-                                  ng-if="!isChrome"
+                                  ng-if="!isChrome && currentPlaying.source !== 'localmusic' && currentPlaying.platform !== 'localmusic'"
                                   ng-click="downloadCurrentTrack()"
                                   ng-disabled="downloadState === 'resolving' || downloadState === 'downloading'"
                                   title="下载当前歌曲为 MP3"
@@ -4021,7 +4021,7 @@
                       <button
                         type="button"
                         class="download-mp3-button"
-                        ng-if="!isChrome"
+                        ng-if="!isChrome && currentPlaying.source !== 'localmusic' && currentPlaying.platform !== 'localmusic'"
                         ng-click="downloadCurrentTrack()"
                         ng-disabled="downloadState === 'resolving' || downloadState === 'downloading'"
                         title="下载当前歌曲为 MP3"

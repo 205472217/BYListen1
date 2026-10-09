@@ -178,7 +178,13 @@ angular.module('listenone').controller('PlayController', [
           ...playlist.tracks.filter((item) => item.id !== downloadedTrack.id),
         ];
         localStorage.setObject('lmplaylist_downloaded', playlist);
-        notyf.success(result.cached ? '歌曲已在已下载列表中' : '下载成功');
+        notyf.success(
+          result.cached
+            ? '歌曲已在已下载列表中'
+            : result.fromMediaCache
+            ? '下载成功（使用了播放缓存）'
+            : '下载成功'
+        );
         $rootScope.$broadcast('downloaded:update');
       }).catch((error) => {
         $scope.downloadState = 'error';

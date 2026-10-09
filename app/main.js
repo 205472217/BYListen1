@@ -14,12 +14,13 @@ const Store = require("electron-store");
 const { autoUpdater } = require("electron-updater");
 const remoteMain = require("@electron/remote/main");
 const { spawn } = require("child_process");
-const { join, dirname, resolve } = require("path");
+const { join, basename, dirname, resolve } = require("path");
 const {
   existsSync,
   mkdirSync,
   appendFileSync,
   createWriteStream,
+  writeFileSync,
   unlink,
   rename,
   stat,
@@ -155,6 +156,229 @@ function getPlatformDownloadHeaders(track) {
   return headers;
 }
 
+/**
+ * 按名字合并请求头（大小写不敏感）。
+ * 平台硬编码头与「播放时记下来的头」可能一个写成 Referer、另一个写成 referer，
+ * 直接 spread 会同时留下两个键，必须去重。
+ */
+function mergeRequestHeaders(...sources) {
+  const merged = {};
+  const nameByLower = new Map();
+  sources.forEach((source) => {
+    if (!source) return;
+    Object.keys(source).forEach((name) => {
+      const lower = name.toLowerCase();
+      const existing = nameByLower.get(lower);
+      if (existing !== undefined) {
+        merged[existing] = source[name];
+      } else {
+        nameByLower.set(lower, name);
+        merged[name] = source[name];
+      }
+    });
+  });
+  return merged;
+}
+
+/**
+ * 把 Referer / Origin 的 scheme 对齐到媒体地址的 scheme。
+ *
+ * 这是 net::ERR_BLOCKED_BY_CLIENT 的根因：Chromium 会**直接拦掉**
+ * 「https:// 的 Referer -> http:// 的目标地址」这种referrer 降级请求，
+ * 请求根本发不出去（不是被服务器拒绝）。
+ * 实测酷狗 tracker 接口返回的播放地址就是 `http://fsandroid.tx.kugou.com/...`，
+ * 而旧代码里写死了 `Referer: https://www.kugou.com/`（qq / bilibili 同理，
+ * 也都是 https 的 Referer），于是这些平台的下载必然被拦。
+ *
+ * 对齐之后：http 媒体地址配 http Referer（host 不变），
+ * 既不会被拦，也保留了防盗链需要的 Referer 语义。
+ */
+function alignHeaderSchemeToUrl(headers, mediaUrl) {
+  let protocol;
+  try {
+    protocol = new URL(mediaUrl).protocol;
+  } catch (error) {
+    return headers;
+  }
+  if (protocol !== "http:") return headers;
+  const aligned = {};
+  Object.keys(headers).forEach((name) => {
+    const value = headers[name];
+    const lower = name.toLowerCase();
+    if (
+      (lower === "referer" || lower === "origin") &&
+      typeof value === "string" &&
+      value.indexOf("https://") === 0
+    ) {
+      aligned[name] = `http://${value.slice("https://".length)}`;
+    } else {
+      aligned[name] = value;
+    }
+  });
+  return aligned;
+}
+
+/**
+ * 「缓存兜底」用的媒体字节缓存。
+ *
+ * 播放时渲染进程已经通过 <audio> 把音频字节拉进过 Chromium，
+ * 这里用 CDP 把同一份字节留一份在内存里，下载失败时直接拿它去转码。
+ * 这是一个「本会话已播放过的 URL」兜底，不是主路径。
+ */
+const MEDIA_CACHE_MAX_TOTAL_BYTES = 160 * 1024 * 1024;
+const MEDIA_CACHE_MAX_ENTRY_BYTES = 40 * 1024 * 1024;
+const mediaBodyCache = new Map();
+let mediaBodyCacheBytes = 0;
+
+function isAudioLikeUrl(url) {
+  return (
+    typeof url === "string" &&
+    (/\.(mp3|m4a|aac|flac|ogg|oga|wav|webm|m4s)(\?|$)/i.test(url) ||
+      url.includes("bilivideo"))
+  );
+}
+
+function cacheMediaBody(url, buffer, mimeType) {
+  if (!url || !buffer || buffer.length === 0) return;
+  if (buffer.length > MEDIA_CACHE_MAX_ENTRY_BYTES) return;
+  const existing = mediaBodyCache.get(url);
+  if (existing) {
+    mediaBodyCacheBytes -= existing.buffer.length;
+    mediaBodyCache.delete(url);
+  }
+  mediaBodyCache.set(url, { buffer, mimeType: mimeType || "", time: Date.now() });
+  mediaBodyCacheBytes += buffer.length;
+  while (
+    mediaBodyCacheBytes > MEDIA_CACHE_MAX_TOTAL_BYTES &&
+    mediaBodyCache.size > 1
+  ) {
+    const oldestKey = mediaBodyCache.keys().next().value;
+    const oldest = mediaBodyCache.get(oldestKey);
+    mediaBodyCache.delete(oldestKey);
+    mediaBodyCacheBytes -= oldest.buffer.length;
+  }
+}
+
+/**
+ * 取缓存字节。先精确匹配 URL；不中再退化为「同 host + 同 path」匹配
+ * （点击下载时会重新解析一遍地址，鉴权 token 可能已经变了）。
+ */
+function getCachedMediaBody(url) {
+  if (!url) return null;
+  const exact = mediaBodyCache.get(url);
+  if (exact) {
+    mediaBodyCache.delete(url);
+    mediaBodyCache.set(url, exact);
+    return exact;
+  }
+  let target;
+  try {
+    target = new URL(url);
+  } catch (error) {
+    return null;
+  }
+  let matchedKey = null;
+  mediaBodyCache.forEach((entry, key) => {
+    if (matchedKey) return;
+    try {
+      const candidate = new URL(key);
+      if (
+        candidate.host === target.host &&
+        candidate.pathname === target.pathname
+      ) {
+        matchedKey = key;
+      }
+    } catch (error) {
+      /* 忽略无法解析的历史键 */
+    }
+  });
+  if (!matchedKey) return null;
+  const entry = mediaBodyCache.get(matchedKey);
+  mediaBodyCache.delete(matchedKey);
+  mediaBodyCache.set(matchedKey, entry);
+  return entry;
+}
+
+/**
+ * 常驻 CDP 监听：渲染进程每播放一首歌，就把那次媒体响应的字节回收进缓存。
+ * 必须在页面加载完成（渲染进程已存在）之后再 attach，否则 Network.enable
+ * 会一直挂住；页面加载期的请求我们不需要，媒体请求都在用户点播之后。
+ */
+function attachMediaRecorder(webContents) {
+  if (!webContents || webContents.isDestroyed()) return;
+  const dbg = webContents.debugger;
+  if (dbg.isAttached()) return;
+  try {
+    dbg.attach("1.3");
+  } catch (error) {
+    return;
+  }
+  const requestMeta = new Map();
+  dbg
+    .sendCommand("Network.enable")
+    .then(() => {
+      dbg.on("message", (event, method, params) => {
+        try {
+          if (method === "Network.requestWillBeSent") {
+            if (params.type === "Media" || isAudioLikeUrl(params.request.url)) {
+              requestMeta.set(params.requestId, {
+                url: params.request.url,
+                type: params.type,
+                status: 0,
+                mimeType: "",
+                contentRange: "",
+              });
+            }
+            if (requestMeta.size > 400) {
+              requestMeta.delete(requestMeta.keys().next().value);
+            }
+            return;
+          }
+          if (method === "Network.responseReceived") {
+            const meta = requestMeta.get(params.requestId);
+            if (meta) {
+              const responseHeaders = params.response.headers || {};
+              meta.status = params.response.status;
+              meta.mimeType = params.response.mimeType;
+              meta.contentRange =
+                responseHeaders["Content-Range"] ||
+                responseHeaders["content-range"] ||
+                "";
+            }
+            return;
+          }
+          if (method === "Network.loadingFinished") {
+            const meta = requestMeta.get(params.requestId);
+            if (!meta) return;
+            // 206 且不是从 0 开始的区间 = 中间片段，存下来也是坏文件，跳过
+            if (meta.status === 206) {
+              const match = /bytes\s+(\d+)-/i.exec(meta.contentRange || "");
+              if (!match || Number(match[1]) !== 0) return;
+            }
+            dbg
+              .sendCommand("Network.getResponseBody", {
+                requestId: params.requestId,
+              })
+              .then((res) => {
+                const buffer = res.base64Encoded
+                  ? Buffer.from(res.body, "base64")
+                  : Buffer.from(res.body, "utf8");
+                cacheMediaBody(meta.url, buffer, meta.mimeType);
+              })
+              .catch(() => {
+                /* Chromium 可能已回收 body，当作未命中 */
+              });
+          }
+        } catch (error) {
+          /* 忽略单条事件异常，不影响播放 */
+        }
+      });
+    })
+    .catch(() => {
+      /* Network.enable 失败时静默降级，只是没有缓存兜底 */
+    });
+}
+
 function getDefaultDownloadPath() {
   const basePath = app.isPackaged ? dirname(process.execPath) : join(__dirname, "..");
   return join(basePath, "download");
@@ -213,6 +437,29 @@ function getFileSize(filePath) {
   });
 }
 
+/**
+ * 选择落盘文件名。
+ * 首选「歌名.mp3」；这个名字已被占用时改用「歌名 (歌手名).mp3」，
+ * 这样不同歌手的同名歌曲各存一份，而同一首歌重复下载仍会命中已下载。
+ * @returns {Promise<{ path: string; exists: boolean }>}
+ */
+async function resolveDownloadTarget(directory, title, artist) {
+  const isUsableFile = async (filePath) =>
+    !!filePath && existsSync(filePath) && (await getFileSize(filePath)) > 0;
+  const primaryPath = join(directory, `${title}.mp3`);
+  const artistPath = artist ? join(directory, `${title} (${artist}).mp3`) : null;
+  if (await isUsableFile(primaryPath)) {
+    if (!artistPath) {
+      return { path: primaryPath, exists: true };
+    }
+    if (await isUsableFile(artistPath)) {
+      return { path: artistPath, exists: true };
+    }
+    return { path: artistPath, exists: false };
+  }
+  return { path: primaryPath, exists: false };
+}
+
 function sendDownloadProgress(event, trackId, progress) {
   if (!event.sender.isDestroyed()) {
     event.sender.send("downloadProgress", { trackId, progress });
@@ -222,6 +469,11 @@ function sendDownloadProgress(event, trackId, progress) {
 function downloadMedia(event, track, temporaryPath) {
   return new Promise((resolvePromise, rejectPromise) => {
     const playbackHeaders = getRememberedMediaHeaders(track.url);
+    const requestHeaders = alignHeaderSchemeToUrl(
+      mergeRequestHeaders(getPlatformDownloadHeaders(track), playbackHeaders),
+      track.url
+    );
+    requestHeaders.Range = "bytes=0-";
     const request = net.request({
       url: track.url,
       method: "GET",
@@ -229,11 +481,7 @@ function downloadMedia(event, track, temporaryPath) {
       credentials: "include",
       cache: "force-cache",
       redirect: "follow",
-      headers: {
-        ...getPlatformDownloadHeaders(track),
-        ...playbackHeaders,
-        Range: "bytes=0-",
-      },
+      headers: requestHeaders,
     });
     request.on("response", (response) => {
       if (response.statusCode < 200 || response.statusCode >= 300) {
@@ -331,21 +579,52 @@ ipcMain.handle("downloadMusic", async (event, track) => {
   const directory = ensureDirectory(getDownloadPath());
   const title = sanitizeFileName(track.title) || "未命名歌曲";
   const artist = sanitizeFileName(track.artist);
-  const fileName = `${artist ? `${artist} - ` : ""}${title}.mp3`;
-  const outputPath = join(directory, fileName);
-  if (existsSync(outputPath) && (await getFileSize(outputPath)) > 0) {
-    return { success: true, cached: true, path: outputPath, fileUrl: pathToFileURL(outputPath).href };
+  const target = await resolveDownloadTarget(directory, title, artist);
+  if (target.exists) {
+    return { success: true, cached: true, path: target.path, fileUrl: pathToFileURL(target.path).href };
   }
+  const outputPath = target.path;
+  const fileName = basename(outputPath);
   const suffix = Date.now();
   const temporaryInput = join(directory, `.${fileName}.${suffix}.source`);
   const temporaryOutput = join(directory, `.${fileName}.${suffix}.mp3`);
+  let usedMediaCache = false;
   try {
-    await downloadMedia(event, track, temporaryInput);
+    try {
+      await downloadMedia(event, track, temporaryInput);
+    } catch (downloadError) {
+      // 兜底：这首歌唱过的话，渲染进程已经把音频字节拉进过 Chromium，
+      // 直接拿那份字节去转码，绕开网络栈的拦截 / 防盗链。
+      const cachedMedia = getCachedMediaBody(track.url);
+      if (!cachedMedia) {
+        throw downloadError;
+      }
+      writeFileSync(temporaryInput, cachedMedia.buffer);
+      usedMediaCache = true;
+      writeLog(
+        "DOWNLOAD",
+        `主请求失败(${downloadError.message})，改用播放缓存 ${cachedMedia.buffer.length} 字节: ${track.url}`
+      );
+    }
     await transcodeToMp3(temporaryInput, temporaryOutput, track);
     await renameFile(temporaryOutput, outputPath);
-    return { success: true, cached: false, path: outputPath, fileUrl: pathToFileURL(outputPath).href };
+    return {
+      success: true,
+      cached: false,
+      fromMediaCache: usedMediaCache,
+      path: outputPath,
+      fileUrl: pathToFileURL(outputPath).href,
+    };
   } catch (error) {
-    return { success: false, error: error.message || "下载失败" };
+    const rawMessage = (error && error.message) || "下载失败";
+    const message = /ERR_BLOCKED_BY_CLIENT/.test(rawMessage)
+      ? "下载被客户端/系统网络栈拦截（ERR_BLOCKED_BY_CLIENT），且这首歌没有可用的播放缓存"
+      : rawMessage;
+    writeLog(
+      "DOWNLOAD",
+      `失败: ${track.title || ""} - ${track.artist || ""} | ${rawMessage} | ${track.url}`
+    );
+    return { success: false, error: message };
   } finally {
     await unlinkFile(temporaryInput);
     await unlinkFile(temporaryOutput);
@@ -708,6 +987,24 @@ function createWindow() {
       `file://${__dirname}/listen1_chrome_extension/listen1.html`,
       { userAgent: ua }
     );
+  });
+
+  // 让「播放缓存兜底」生效：页面加载完成后挂上 CDP 媒体监听。
+  // 与 DevTools 互斥（同一个 target），所以开 F12 时先摘掉、关掉再挂回来。
+  mainWindow.webContents.on("did-finish-load", () => {
+    if (mainWindow) attachMediaRecorder(mainWindow.webContents);
+  });
+  mainWindow.webContents.on("devtools-opened", () => {
+    try {
+      if (mainWindow && mainWindow.webContents.debugger.isAttached()) {
+        mainWindow.webContents.debugger.detach();
+      }
+    } catch (error) {
+      console.log("detach media recorder failed:", error);
+    }
+  });
+  mainWindow.webContents.on("devtools-closed", () => {
+    if (mainWindow) attachMediaRecorder(mainWindow.webContents);
   });
 
   setThumbarPause();

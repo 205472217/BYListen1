@@ -158,6 +158,8 @@
  "_SHORTCUTS_NOT_SET": "N/A",
  "_QUICK_SEARCH": "Pesquisa Rápida",
  "_SEARCH_PLAYLIST": "Procurar Playlist",
+ "_SEARCH_FAIL": "Falha na pesquisa, tente novamente mais tarde",
+ "_SEARCH_EMPTY": "Nenhum resultado encontrado",
  "_KEYBOARD_SPACE": "Espaço",
  "_NOT_LOGIN_NICKNAME": "Anônimo",
  "_LOGIN_DIALOG_NOTICE": "Abrindo a página de login, faça o login nessa página e clique em concluir o login",

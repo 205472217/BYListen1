@@ -383,6 +383,8 @@ class bilibili {
       success: (fn) => {
         const keyword = getParameterByName('keywords', url);
         const curpage = getParameterByName('curpage', url);
+        // 每页条数（与下面的 page_size 保持一致），供分页算法计算总页数
+        const perPage = 42;
 
         const target_url = `https://api.bilibili.com/x/web-interface/search/type?__refresh__=true&_extra=&context=&page=${curpage}&page_size=42&platform=pc&highlight=1&single_column=0&keyword=${encodeURIComponent(
           keyword
@@ -405,15 +407,21 @@ class bilibili {
             axios
               .get(target_url, { withCredentials: true })
               .then((response) => {
-                const result = response.data.data.result.map((song) =>
+                const payload = response.data && response.data.data;
+                const list = payload && Array.isArray(payload.result)
+                  ? payload.result
+                  : [];
+                const result = list.map((song) =>
                   this.bi_convert_song2(song)
                 );
-                const total = response.data.data.numResults;
+                const total = payload ? payload.numResults : 0;
                 return fn({
                   result,
                   total,
+                  perPage,
                 });
-              });
+              })
+              .catch(() => fn({ result: [], total: 0, perPage }));
           }
         );
       },

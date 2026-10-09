@@ -322,6 +322,8 @@ class kuwo {
     const curpage = getParameterByName('curpage', url);
     const pn = parseInt(curpage) - 1;
     const searchType = getParameterByName('type', url);
+    // 每页条数（与下面 url 里的 rn 保持一致），供分页算法计算总页数
+    const perPage = searchType === '1' ? 30 : 20;
     let api = '';
     let target_url = '';
     switch (searchType) {
@@ -347,6 +349,7 @@ class kuwo {
               result,
               total,
               type: searchType,
+              perPage,
             });
           }
           if (searchType === '0' && response.data.abslist !== undefined) {
@@ -371,6 +374,7 @@ class kuwo {
             result,
             total,
             type: searchType,
+            perPage,
           });
         });
       },

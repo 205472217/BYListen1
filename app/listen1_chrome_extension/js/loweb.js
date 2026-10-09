@@ -99,6 +99,9 @@ function getProviderByItemId(itemId) {
   return (PROVIDERS.find((i) => i.id === prefix) || {}).instance;
 }
 
+// 搜索默认每页条数（与 InstantSearchController 的默认值保持一致）
+const DEFAULT_SEARCH_PER_PAGE = 20;
+
 /* cache for all playlist request except myplaylist and localmusic */
 const playlistCache = new LRUCache({
   max: 100,
@@ -122,29 +125,69 @@ const MediaService = {
     if (source === 'allmusic') {
       // search all platform and merge result
       const callbackArray = getAllSearchProviders().map((p) => (fn) => {
-        p.search(url).success((r) => {
-          fn(null, r);
-        });
+        // 任一平台返回非法结构 / 迟迟不回调，都不能拖垮整个聚合搜索
+        // （否则 async.parallel 永不返回，页面会一直空白）
+        let replied = false;
+        const reply = (r) => {
+          if (replied) {
+            return;
+          }
+          replied = true;
+          fn(
+            null,
+            r && Array.isArray(r.result)
+              ? r
+              : { result: [], total: 0, perPage: DEFAULT_SEARCH_PER_PAGE }
+          );
+        };
+        try {
+          p.search(url).success(reply);
+        } catch (e) {
+          reply(null);
+          return;
+        }
+        setTimeout(() => reply(null), 15000);
       });
       return {
         success: (fn) =>
           async.parallel(callbackArray, (err, platformResultArray) => {
             // TODO: nicer pager, playlist support
+            const platformResults = (platformResultArray || []).filter(Boolean);
+            const perPageOf = (elem) =>
+              Number(elem.perPage) > 0
+                ? Number(elem.perPage)
+                : DEFAULT_SEARCH_PER_PAGE;
+            // 聚合页的每页条数 = 各平台每页条数之和（各平台结果交错拼接）
+            const perPage = platformResults.reduce(
+              (acc, elem) => acc + perPageOf(elem),
+              0
+            ) || DEFAULT_SEARCH_PER_PAGE;
             const result = {
               result: [],
-              total: 1000,
-              type: platformResultArray[0].type,
+              total: 0,
+              perPage,
+              totalpage: 1,
+              type: platformResults[0] ? platformResults[0].type : 0,
             };
             const maxLength = Math.max(
-              ...platformResultArray.map((elem) => elem.result.length)
+              0,
+              ...platformResults.map((elem) => elem.result.length)
             );
             for (let i = 0; i < maxLength; i += 1) {
-              platformResultArray.forEach((elem) => {
+              platformResults.forEach((elem) => {
                 if (i < elem.result.length) {
                   result.result.push(elem.result[i]);
                 }
               });
             }
+            // 各平台都是按"第 n 页"取数，聚合结果最多能翻到
+            // max(ceil(total / perPage)) 页；直接给出总页数，避免出现空白页
+            const pageCounts = platformResults
+              .filter((elem) => Number(elem.total) > 0)
+              .map((elem) => Math.ceil(Number(elem.total) / perPageOf(elem)));
+            const totalpage = pageCounts.length ? Math.max(...pageCounts) : 1;
+            result.totalpage = totalpage;
+            result.total = totalpage * perPage;
             return fn(result);
           }),
       };

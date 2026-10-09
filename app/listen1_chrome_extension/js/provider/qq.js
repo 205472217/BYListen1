@@ -352,56 +352,103 @@ class qq {
       1: 3,
     };
 
+    // 每页条数必须告诉调用方（InstantSearchController 用它算总页数）。
+    // 注意此接口的 sum 上限是 999，配合 50/页 时真实只有 20 页。
+    const perPage = 50;
+    const emptyResult = {
+      result: [],
+      total: 0,
+      type: searchType,
+      perPage,
+    };
+
+    const buildQuery = () => ({
+      comm: {
+        ct: '19',
+        cv: '1859',
+        uin: '0',
+      },
+      req: {
+        method: 'DoSearchForQQMusicDesktop',
+        module: 'music.search.SearchCgiService',
+        param: {
+          grp: 1,
+          num_per_page: perPage,
+          page_num: parseInt(curpage, 10),
+          query: keyword,
+          search_type: searchTypeMapping[searchType],
+        },
+      },
+    });
+
     return {
       success: (fn) => {
-        const limit = 50;
-        const page = curpage;
-        const query = {
-          comm: {
-            ct: '19',
-            cv: '1859',
-            uin: '0',
-          },
-          req: {
-            method: 'DoSearchForQQMusicDesktop',
-            module: 'music.search.SearchCgiService',
-            param: {
-              grp: 1,
-              num_per_page: limit,
-              page_num: parseInt(page, 10),
-              query: keyword,
-              search_type: searchTypeMapping[searchType],
-            },
-          },
+        // 这个接口在"请求过频/后端风控"时会返回 HTTP 200 + req.code !== 0
+        // （常见 2001）且不带 data.body。原实现直接取
+        // data.req.data.body.song.list 会抛 TypeError，异常吞在 axios 的 then 里，
+        // .success 回调永不触发 —— 搜索页就会一直空白转圈（allmusic 聚合搜索
+        // 也会因为等不到回调而永久挂起）。
+        // 这里：软错误先原样重试一次，仍失败就按"无结果"返回，让 UI 能恢复正常。
+        const requestOnce = (attempt) => {
+          const retryOrEmpty = () => {
+            if (attempt < 1) {
+              setTimeout(() => requestOnce(attempt + 1), 600);
+            } else {
+              fn(emptyResult);
+            }
+          };
+          axios
+            .post(target_url, buildQuery())
+            .then((response) => {
+              const { data } = response;
+              const payload = data && data.req;
+              if (!payload || payload.code !== 0 || !payload.data) {
+                retryOrEmpty();
+                return;
+              }
+              const { body, meta } = payload.data;
+              if (!body) {
+                retryOrEmpty();
+                return;
+              }
+              const sum = meta && Number.isFinite(meta.sum) ? meta.sum : 0;
+
+              let result = [];
+              let total = sum;
+              if (searchType === '0') {
+                const list = body.song && Array.isArray(body.song.list)
+                  ? body.song.list
+                  : [];
+                result = list.map((item) => this.qq_convert_song2(item));
+              } else if (searchType === '1') {
+                const list =
+                  body.songlist && Array.isArray(body.songlist.list)
+                    ? body.songlist.list
+                    : [];
+                result = list.map((info) => ({
+                  id: `qqplaylist_${info.dissid}`,
+                  title: this.htmlDecode(info.dissname),
+                  source: 'qq',
+                  source_url: `https://y.qq.com/n/ryqq/playlist/${info.dissid}`,
+                  img_url: info.imgurl,
+                  url: `qqplaylist_${info.dissid}`,
+                  author: this.UnicodeToAscii(info.creator.name),
+                  count: info.song_count,
+                }));
+              }
+              if (!Number.isFinite(total)) {
+                total = result.length;
+              }
+              return fn({
+                result,
+                total,
+                type: searchType,
+                perPage,
+              });
+            })
+            .catch(() => retryOrEmpty());
         };
-        axios.post(target_url, query).then((response) => {
-          const { data } = response;
-          let result = [];
-          let total = 0;
-          if (searchType === '0') {
-            result = data.req.data.body.song.list.map((item) =>
-              this.qq_convert_song2(item)
-            );
-            total = data.req.data.meta.sum;
-          } else if (searchType === '1') {
-            result = data.req.data.body.songlist.list.map((info) => ({
-              id: `qqplaylist_${info.dissid}`,
-              title: this.htmlDecode(info.dissname),
-              source: 'qq',
-              source_url: `https://y.qq.com/n/ryqq/playlist/${info.dissid}`,
-              img_url: info.imgurl,
-              url: `qqplaylist_${info.dissid}`,
-              author: this.UnicodeToAscii(info.creator.name),
-              count: info.song_count,
-            }));
-            total = data.req.data.meta.sum;
-          }
-          return fn({
-            result,
-            total,
-            type: searchType,
-          });
-        });
+        requestOnce(0);
       },
     };
   }

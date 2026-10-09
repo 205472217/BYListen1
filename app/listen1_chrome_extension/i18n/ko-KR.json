@@ -158,6 +158,8 @@
   "_SHORTCUTS_NOT_SET": "N/A",
   "_QUICK_SEARCH": "빠른 검색",
   "_SEARCH_PLAYLIST": "재생 목록 검색",
+  "_SEARCH_FAIL": "검색에 실패했습니다. 잠시 후 다시 시도해 주세요",
+  "_SEARCH_EMPTY": "검색 결과가 없습니다",
   "_KEYBOARD_SPACE": "스페이스",
   "_NOT_LOGIN_NICKNAME": "익명",
   "_LOGIN_DIALOG_NOTICE": "그인 페이지를 여는 중입니다. 해당 페이지에 로그인하고 로그인 완료를 클릭하십시오.",

@@ -548,6 +548,79 @@ function transcodeToMp3(inputPath, outputPath, track) {
   });
 }
 
+/**
+ * 酷我的歌单 / 专辑详情接口要求 `Secret` 请求头，值由 www.kuwo.cn 下发的
+ * `Hm_Iuvt_...` cookie 计算得到；而且该 cookie 必须能随渲染进程的跨源请求一起发出。
+ *
+ * listen1.html 是 file:// 页面，渲染进程自己去请求 www.kuwo.cn 时：
+ *   1) 响应里的 Set-Cookie 不会落到会话 → 永远拿不到 token；
+ *   2) 就算会话里有这个 cookie，默认 SameSite=Lax 也不会随跨源 XHR 发送，
+ *      服务器直接回 {"success":false,"message":"The request is illegal!"}。
+ * 所以在主进程用会话补种，并重设为 SameSite=None; Secure，让渲染进程的请求能带上它。
+ */
+const KUWO_TOKEN_COOKIE = "Hm_Iuvt_cdb524f42f23cer9b268564v7y735ewrq2324";
+const KUWO_DESKTOP_UA =
+  "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/120.0.0.0 Safari/537.36";
+
+function fetchPageInSession(url, userAgent) {
+  return new Promise((resolvePromise) => {
+    const request = net.request({
+      url,
+      method: "GET",
+      session: session.defaultSession,
+      useSessionCookies: true,
+      credentials: "include",
+      redirect: "follow",
+    });
+    request.setHeader("User-Agent", userAgent);
+    request.on("response", (response) => {
+      response.on("data", () => {});
+      response.on("end", () => resolvePromise(true));
+    });
+    request.on("error", () => resolvePromise(false));
+    request.end();
+  });
+}
+
+async function ensureKuwoToken(force) {
+  const domain = "https://www.kuwo.cn/";
+  const readToken = () =>
+    session.defaultSession.cookies
+      .get({ url: domain, name: KUWO_TOKEN_COOKIE })
+      .then((list) => (list && list.length ? list[0].value : ""))
+      .catch(() => "");
+  try {
+    if (force) {
+      await session.defaultSession.cookies
+        .remove(domain, KUWO_TOKEN_COOKIE)
+        .catch(() => {});
+    }
+    let token = await readToken();
+    if (!token) {
+      await fetchPageInSession(domain, KUWO_DESKTOP_UA);
+      token = await readToken();
+    }
+    if (!token) return "";
+    await session.defaultSession.cookies.set({
+      url: domain,
+      name: KUWO_TOKEN_COOKIE,
+      value: token,
+      domain: "www.kuwo.cn",
+      path: "/",
+      secure: true,
+      sameSite: "no_restriction",
+      expirationDate: Math.floor(Date.now() / 1000) + 60 * 60 * 24,
+    });
+    return token;
+  } catch (error) {
+    return "";
+  }
+}
+
+ipcMain.handle("kuwoEnsureToken", (event, options) =>
+  ensureKuwoToken(Boolean(options && options.force))
+);
+
 ipcMain.handle("getDownloadPath", () => ensureDirectory(getDownloadPath()));
 
 ipcMain.handle("chooseDownloadPath", async () => {

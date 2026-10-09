@@ -230,6 +230,24 @@ class kuwo {
   }
   */
   static kw_get_token(callback, isRetry) {
+    const name = 'Hm_Iuvt_cdb524f42f23cer9b268564v7y735ewrq2324';
+
+    // Electron：token 必须由主进程补种（并重设为 SameSite=None; Secure）。
+    // 渲染进程自己请求 www.kuwo.cn 既存不下 Set-Cookie、也发不出默认 SameSite 的
+    // cookie，详情接口会一直回 "The request is illegal!"。
+    if (isElectron()) {
+      try {
+        // eslint-disable-next-line global-require
+        const { ipcRenderer } = require('electron');
+        return ipcRenderer
+          .invoke('kuwoEnsureToken', { force: !!isRetry })
+          .then((token) => callback(token || ''))
+          .catch(() => callback(''));
+      } catch (error) {
+        // 拿不到 ipcRenderer 时退回下面的浏览器实现
+      }
+    }
+
     let isRetryValue = true;
     if (isRetry === undefined) {
       isRetryValue = false;
@@ -237,7 +255,6 @@ class kuwo {
       isRetryValue = isRetry;
     }
     const domain = 'https://www.kuwo.cn';
-    const name = 'Hm_Iuvt_cdb524f42f23cer9b268564v7y735ewrq2324';
 
     cookieGet(
       {
@@ -309,9 +326,16 @@ class kuwo {
     }
     // axios.get(tracks_url).then((response) => {
     this.kw_cookie_get(tracks_url, (response) => {
-      const tracks = response.data.data.musicList.map((item) =>
-        this.kw_convert_song2(item)
-      );
+      const list =
+        response && response.data && response.data.data
+          ? response.data.data.musicList
+          : null;
+      // 拿不到结构（风控 / 未授权 / 网络异常）时给空数组，
+      // 不能让 async.concat 永远等不到回调
+      if (!Array.isArray(list)) {
+        return callback(null, []);
+      }
+      const tracks = list.map((item) => this.kw_convert_song2(item));
       return callback(null, tracks);
     });
   }
@@ -577,86 +601,44 @@ class kuwo {
   }
 
   static show_playlist(url) {
-    const offset = Number(getParameterByName('offset', url));
+    const offset = Number(getParameterByName('offset', url)) || 0;
 
-    /* const id_available = {
-      1265: '经典',
-      577: '纯音乐',
-      621: '网络',
-      155: '怀旧',
-      1879: '网红',
-      220: '佛乐',
-      180: '影视',
-      578: '器乐',
-      1877: '游戏',
-      181: '二次元',
-      882: 'KTV',
-      216: '喊麦',
-      1366: '3D',
-      146: '伤感',
-      62: '放松',
-      58: '励志',
-      143: '开心',
-      137: '甜蜜',
-      139: '兴奋',
-      67: '安静',
-      66: '治愈',
-      147: '寂寞',
-      160: '四年',
-      366: '运动',
-      354: '睡前',
-      378: '跳舞',
-      1876: '学习',
-      353: '清晨',
-      359: '夜店',
-      382: '校园',
-      544: '亲热',
-      363: '咖啡店',
-      375: '旅行',
-      371: '散步',
-      386: '工作',
-      336: '婚礼',
-      637: '70后',
-      638: '80后',
-      639: '90后',
-      640: '00后',
-      268: '10后',
-      393: '流行',
-      391: '电子',
-      389: '摇滚',
-      1921: '民歌',
-      392: '民谣',
-      399: '乡村',
-      35: '欧洲',
-      37: '华语',
-    }; */
-    // const target_url = 'https://www.kuwo.cn/www/categoryNew/getPlayListInfoUnderCategory?'
-    // + `type=taglist&digest=10000&id=${37}&start=${offset}&count=50`;
-    const target_url = `https://www.kuwo.cn/api/pc/classify/playlist/getRcmPlayList?pn=${
-      offset / 25 + 1
-    }&rn=25&order=hot&httpsStatus=1`;
-    /*
-    精选歌单:roder=最热:hot, 最新:new
-    tag歌单地址 https://www.kuwo.cn/api/pc/classify/playlist/getTagPlayList?pn=${offset / 25 + 1}&rn=25&id=37&httpsStatus=1
-    id =华语:37,
-    */
+    // 注意：酷我「精选歌单」接口不支持分页——实测 pn=1 / 2 / 3 返回逐条完全相同的
+    // 内容（rn=25 时都是同一批 30 条）。旧实现把 offset 换算成 pn 反复请求，
+    // 前端又不断 concat，结果就是「1-10、11-20 完全一样，一直滚一直重复、滚动条没有尽头」。
+    // 既然拿不到第二页，就在第一页之后直接返回空 + noMore，让前端停下来。
+    if (offset > 0) {
+      return {
+        success: (fn) => fn({ result: [], noMore: true }),
+      };
+    }
+
+    // 精选歌单: order=最热:hot, 最新:new
+    // （旧的 getTagPlayList / getPlayListInfoUnderCategory 均已失效，
+    //   所以 get_playlist_filters 返回空数组，酷我目前没有筛选按钮）
+    const target_url =
+      'https://www.kuwo.cn/api/pc/classify/playlist/getRcmPlayList' +
+      '?pn=1&rn=25&order=hot&httpsStatus=1';
     return {
       success: (fn) => {
-        axios.get(target_url).then((response) => {
-          const { data } = response.data;
-          if (!data) {
-            return fn([]);
-          }
-          const result = data.data.map((item) => ({
-            cover_img_url: item.img,
-            title: item.name,
-            id: `kwplaylist_${item.id}`,
-            source_url: `https://www.kuwo.cn/playlist_detail/${item.id}`,
-          }));
-          return fn({
-            result,
-          });
-        });
+        axios
+          .get(target_url)
+          .then((response) => {
+            const { data } = response.data;
+            // 结构异常/被限流时按「没有更多」处理，但必须回调，
+            // 否则歌单广场会一直停在加载态
+            if (!data || !Array.isArray(data.data)) {
+              return fn({ result: [], noMore: true });
+            }
+            const result = data.data.map((item) => ({
+              cover_img_url: item.img,
+              title: item.name,
+              id: `kwplaylist_${item.id}`,
+              source_url: `https://www.kuwo.cn/playlist_detail/${item.id}`,
+            }));
+            return fn({ result, noMore: true });
+          })
+          .catch(() => fn({ result: [], noMore: true }));
       },
     };
   }

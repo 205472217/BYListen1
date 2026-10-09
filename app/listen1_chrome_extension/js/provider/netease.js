@@ -85,19 +85,22 @@ class netease {
     const data = this.weapi({});
     return {
       success: (fn) => {
-        axios.post(url, new URLSearchParams(data)).then((response) => {
-          const result = [];
-          response.data.list.forEach((item) => {
-            const playlist = {
+        axios
+          .post(url, new URLSearchParams(data))
+          .then((response) => {
+            const list = response.data && response.data.list;
+            if (!Array.isArray(list)) {
+              return fn({ result: [] });
+            }
+            const result = list.map((item) => ({
               cover_img_url: item.coverImgUrl,
               id: `neplaylist_${item.id}`,
               source_url: `https://music.163.com/#/playlist?id=${item.id}`,
               title: item.name,
-            };
-            result.push(playlist);
-          });
-          return fn({ result });
-        });
+            }));
+            return fn({ result });
+          })
+          .catch(() => fn({ result: [] }));
       },
     };
   }
@@ -124,36 +127,47 @@ class netease {
 
     return {
       success: (fn) => {
-        axios.get(target_url).then((response) => {
-          const { data } = response;
-          const list_elements = Array.from(
-            new DOMParser()
+        axios
+          .get(target_url)
+          .then((response) => {
+            const { data } = response;
+            const container = new DOMParser()
               .parseFromString(data, 'text/html')
-              .getElementsByClassName('m-cvrlst')[0].children
-          );
-          const result = list_elements.map((item) => ({
-            cover_img_url: item
-              .getElementsByTagName('img')[0]
-              .src.replace('140y140', '512y512'),
-
-            title: item
-              .getElementsByTagName('div')[0]
-              .getElementsByTagName('a')[0].title,
-            id: `neplaylist_${getParameterByName(
-              'id',
-              item.getElementsByTagName('div')[0].getElementsByTagName('a')[0]
-                .href
-            )}`,
-            source_url: `https://music.163.com/#/playlist?id=${getParameterByName(
-              'id',
-              item.getElementsByTagName('div')[0].getElementsByTagName('a')[0]
-                .href
-            )}`,
-          }));
-          return fn({
-            result,
-          });
-        });
+              .getElementsByClassName('m-cvrlst')[0];
+            // 命中风控页 / 登录页 / 页面结构变化时，容器取不到。
+            // 旧代码直接取 [0].children 会抛异常，异常吞在 then 里 →
+            // success 回调永不触发 → 歌单广场永久空白。
+            if (!container) {
+              return fn({ result: [] });
+            }
+            const result = Array.from(container.children)
+              .map((item) => {
+                try {
+                  const cover = item.getElementsByTagName('img')[0];
+                  const anchor = item
+                    .getElementsByTagName('div')[0]
+                    .getElementsByTagName('a')[0];
+                  const id = getParameterByName('id', anchor.href);
+                  if (!cover || !id) {
+                    return null;
+                  }
+                  return {
+                    cover_img_url: cover.src.replace('140y140', '512y512'),
+                    title: anchor.title,
+                    id: `neplaylist_${id}`,
+                    source_url: `https://music.163.com/#/playlist?id=${id}`,
+                  };
+                } catch (error) {
+                  return null;
+                }
+              })
+              .filter((item) => item !== null);
+            return fn({
+              result,
+            });
+          })
+          // 请求失败/网络异常：返回空列表，界面不能永久停在加载态
+          .catch(() => fn({ result: [] }));
       },
     };
   }
@@ -210,6 +224,11 @@ class netease {
               callback(null);
             }
           );
+        } else {
+          // cookie 已经齐了，直接继续。
+          // 少了这个 else，第二次及以后调用 ne_ensure_cookie 会走进空分支，
+          // callback 永远不触发 → 详情请求根本发不出去 → 页面一直转圈。
+          callback(null);
         }
       }
     );
@@ -270,22 +289,38 @@ class netease {
       ids: `[${track_ids.join(',')}]`,
     };
     const data = this.weapi(d);
-    axios.post(target_url, new URLSearchParams(data)).then((response) => {
-      const tracks = response.data.songs.map((track_json) => ({
-        id: `netrack_${track_json.id}`,
-        title: track_json.name,
-        artist: track_json.ar[0].name,
-        artist_id: `neartist_${track_json.ar[0].id}`,
-        album: track_json.al.name,
-        album_id: `nealbum_${track_json.al.id}`,
-        source: 'netease',
-        source_url: `https://music.163.com/#/song?id=${track_json.id}`,
-        img_url: track_json.al.picUrl,
-        // url: `netrack_${track_json.id}`,
-      }));
+    axios
+      .post(target_url, new URLSearchParams(data))
+      .then((response) => {
+        const songs = response.data && response.data.songs;
+        if (!Array.isArray(songs)) {
+          return callback(null, []);
+        }
+        const tracks = songs
+          .map((track_json) => {
+            try {
+              return {
+                id: `netrack_${track_json.id}`,
+                title: track_json.name,
+                artist: track_json.ar[0].name,
+                artist_id: `neartist_${track_json.ar[0].id}`,
+                album: track_json.al.name,
+                album_id: `nealbum_${track_json.al.id}`,
+                source: 'netease',
+                source_url: `https://music.163.com/#/song?id=${track_json.id}`,
+                img_url: track_json.al.picUrl,
+                // url: `netrack_${track_json.id}`,
+              };
+            } catch (error) {
+              return null;
+            }
+          })
+          .filter((track) => track !== null);
 
-      return callback(null, tracks);
-    });
+        return callback(null, tracks);
+      })
+      // 某一批取歌失败时给空数组，不能让 async.concat 永远等不到回调
+      .catch(() => callback(null, []));
   }
 
   static split_array(myarray, size) {
@@ -314,39 +349,48 @@ class netease {
         };
         const data = this.weapi(d);
         this.ne_ensure_cookie(() => {
-          axios.post(target_url, new URLSearchParams(data)).then((response) => {
-            const { data: res_data } = response;
-            const info = {
-              id: `neplaylist_${list_id}`,
-              cover_img_url: res_data.playlist.coverImgUrl,
-              title: res_data.playlist.name,
-              source_url: `https://music.163.com/#/playlist?id=${list_id}`,
-            };
-            const max_allow_size = 1000;
-            const trackIdsArray = this.split_array(
-              res_data.playlist.trackIds,
-              max_allow_size
-            );
-
-            function ng_parse_playlist_tracks_wrapper(trackIds, callback) {
-              return netease.ng_parse_playlist_tracks(trackIds, callback);
-            }
-
-            async.concat(
-              trackIdsArray,
-              ng_parse_playlist_tracks_wrapper,
-              (err, tracks) => {
-                fn({ tracks, info });
+          axios
+            .post(target_url, new URLSearchParams(data))
+            .then((response) => {
+              const { data: res_data } = response;
+              const playlist_info = res_data && res_data.playlist;
+              // 歌单不存在 / 已下架 / 需要登录 / 被风控时，网易云不返回 playlist 字段。
+              // 旧代码直接取 res_data.playlist.coverImgUrl 会抛 TypeError，
+              // 异常吞在 then 里 → success 回调永不触发 → 详情页永久转圈。
+              if (!playlist_info) {
+                return fn({
+                  status: '0',
+                  reason: '网易云歌单暂时无法加载（可能需要登录，或该歌单已下架）',
+                });
               }
-            );
+              const info = {
+                id: `neplaylist_${list_id}`,
+                cover_img_url: playlist_info.coverImgUrl,
+                title: playlist_info.name,
+                source_url: `https://music.163.com/#/playlist?id=${list_id}`,
+              };
+              const max_allow_size = 1000;
+              const trackIdsArray = this.split_array(
+                playlist_info.trackIds || [],
+                max_allow_size
+              );
 
-            // request every tracks to fetch song info
-            // async_process_list(res_data.playlist.trackIds, ng_render_playlist_result_item,
-            //   (err, tracks) => fn({
-            //     tracks,
-            //     info,
-            //   }));
-          });
+              function ng_parse_playlist_tracks_wrapper(trackIds, callback) {
+                return netease.ng_parse_playlist_tracks(trackIds, callback);
+              }
+
+              async.concat(
+                trackIdsArray,
+                ng_parse_playlist_tracks_wrapper,
+                (err, tracks) => {
+                  fn({ tracks, info });
+                }
+              );
+            })
+            // 请求失败：明确把失败交回 UI，而不是让页面一直转圈
+            .catch(() =>
+              fn({ status: '0', reason: '网易云歌单加载失败，请稍后重试' })
+            );
         });
       },
     };

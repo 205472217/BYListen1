@@ -23,16 +23,22 @@ function cookieGet(cookieRequest, callback) {
       callback(cookie);
     });
   }
-  const remote = require('@electron/remote'); // eslint-disable-line
-  remote.session.defaultSession.cookies
-    .get(cookieRequest)
-    .then((cookieArray) => {
-      let cookie = null;
-      if (cookieArray.length > 0) {
-        [cookie] = cookieArray;
-      }
-      callback(cookie);
-    });
+  try {
+    const remote = require('@electron/remote'); // eslint-disable-line
+    remote.session.defaultSession.cookies
+      .get(cookieRequest)
+      .then((cookieArray) => {
+        let cookie = null;
+        if (cookieArray.length > 0) {
+          [cookie] = cookieArray;
+        }
+        callback(cookie);
+      })
+      // 读取失败也必须回调，否则依赖 cookie 的流程（如网易云登录态）会永久挂起
+      .catch(() => callback(null));
+  } catch (error) {
+    callback(null);
+  }
 }
 
 function cookieSet(cookie, callback) {
@@ -41,10 +47,18 @@ function cookieSet(cookie, callback) {
       callback(arg1, arg2);
     });
   }
-  const remote = require('@electron/remote'); // eslint-disable-line
-  remote.session.defaultSession.cookies.set(cookie).then((arg1, arg2) => {
-    callback(null, arg1, arg2);
-  });
+  try {
+    const remote = require('@electron/remote'); // eslint-disable-line
+    remote.session.defaultSession.cookies
+      .set(cookie)
+      .then((arg1, arg2) => {
+        callback(null, arg1, arg2);
+      })
+      // 写失败也要回调，避免调用方一直等
+      .catch(() => callback(null));
+  } catch (error) {
+    callback(null);
+  }
 }
 function cookieRemove(cookie, callback) {
   if (!isElectron()) {
@@ -52,12 +66,18 @@ function cookieRemove(cookie, callback) {
       callback(arg1, arg2);
     });
   }
-  const remote = require('@electron/remote'); // eslint-disable-line
-  remote.session.defaultSession.cookies
-    .remove(cookie.url, cookie.name)
-    .then((arg1, arg2) => {
-      callback(null, arg1, arg2);
-    });
+  try {
+    const remote = require('@electron/remote'); // eslint-disable-line
+    remote.session.defaultSession.cookies
+      .remove(cookie.url, cookie.name)
+      .then((arg1, arg2) => {
+        callback(null, arg1, arg2);
+      })
+      // 删除失败也要回调，避免调用方一直等
+      .catch(() => callback(null));
+  } catch (error) {
+    callback(null);
+  }
 }
 
 function setPrototypeOfLocalStorage() {

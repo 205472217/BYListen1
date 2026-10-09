@@ -108,6 +108,43 @@ const playlistCache = new LRUCache({
   maxAge: 60 * 60 * 1000, // 1 hour cache expire
 });
 
+/**
+ * 歌单类请求的统一兜底。
+ *
+ * provider 同步抛错、返回非法结构、或者干脆永不回调时，也要把结果交回去，
+ * 否则调用方的 success 回调永远不触发，界面就会永久停在加载态（"一直转圈"）。
+ * 用 replied 标记保证只回调一次；超时后按"空结果 / 失败"返回。
+ */
+const PLAYLIST_REQUEST_TIMEOUT = 20000;
+
+function guardPlaylistRequest(exec, timeoutResultFactory) {
+  return {
+    success: (fn) => {
+      let replied = false;
+      let timer = null;
+      const reply = (result) => {
+        if (replied) {
+          return;
+        }
+        replied = true;
+        if (timer !== null) {
+          clearTimeout(timer);
+        }
+        fn(result);
+      };
+      timer = setTimeout(
+        () => reply(timeoutResultFactory()),
+        PLAYLIST_REQUEST_TIMEOUT
+      );
+      try {
+        exec(reply);
+      } catch (error) {
+        reply(timeoutResultFactory());
+      }
+    },
+  };
+}
+
 function queryStringify(options) {
   const query = JSON.parse(JSON.stringify(options));
   return new URLSearchParams(query).toString();
@@ -203,7 +240,10 @@ const MediaService = {
   showPlaylistArray(source, offset, filter_id) {
     const provider = getProviderByName(source);
     const url = `/show_playlist?${queryStringify({ offset, filter_id })}`;
-    return provider.show_playlist(url);
+    return guardPlaylistRequest(
+      (reply) => provider.show_playlist(url).success(reply),
+      () => ({ result: [] })
+    );
   },
 
   getPlaylistFilters(source) {
@@ -258,28 +298,39 @@ const MediaService = {
         success: (fn) => fn(hit),
       };
     }
-    return {
-      success: (fn) =>
+    return guardPlaylistRequest(
+      (reply) =>
         provider.get_playlist(url).success((playlist) => {
-          if (provider !== myplaylist && provider !== localmusic) {
+          // 只缓存成功的歌单；失败结果（status: '0'）不能进缓存，
+          // 否则接下来 1 小时都会直接复现失败
+          if (
+            provider !== myplaylist &&
+            provider !== localmusic &&
+            playlist &&
+            playlist.status !== '0' &&
+            playlist.info
+          ) {
             playlistCache.set(listId, playlist);
           }
-          fn(playlist);
+          reply(playlist);
         }),
-    };
+      () => ({ status: '0', reason: '歌单加载超时，请稍后重试' })
+    );
   },
 
   clonePlaylist(id, type) {
     const provider = getProviderByItemId(id);
     const url = `/playlist?list_id=${id}`;
-    return {
-      success: (fn) => {
+    return guardPlaylistRequest(
+      (reply) =>
         provider.get_playlist(url).success((data) => {
-          myplaylist.save_myplaylist(type, data);
-          fn();
-        });
-      },
-    };
+          if (data && data.status !== '0' && data.info) {
+            myplaylist.save_myplaylist(type, data);
+          }
+          reply();
+        }),
+      () => {}
+    );
   },
 
   removeMyPlaylist(id, type) {

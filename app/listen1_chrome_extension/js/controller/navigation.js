@@ -130,6 +130,10 @@ angular.module('listenone').controller('NavigationController', [
       $scope.clearSort();
       const listId = new URL(url, window.location).searchParams.get('list_id');
       MediaService.getPlaylist(listId).success((data) => {
+        if (!data || data.status === '0' || !data.info) {
+          notyf.info((data && data.reason) || '歌单加载失败，请稍后重试');
+          return;
+        }
         $scope.songs = data.tracks;
         applyPlayablePrecheck($scope.songs);
         $scope.list_id = data.info.id;
@@ -220,8 +224,8 @@ angular.module('listenone').controller('NavigationController', [
 
       const listId = new URL(url, window.location).searchParams.get('list_id');
       MediaService.getPlaylist(listId, useCache).success((data) => {
-        if (data.status === '0') {
-          notyf.info(data.reason);
+        if (!data || data.status === '0' || !data.info) {
+          notyf.info((data && data.reason) || '歌单加载失败，请稍后重试');
           $scope.popWindow();
           return;
         }
@@ -247,6 +251,10 @@ angular.module('listenone').controller('NavigationController', [
 
     $scope.directplaylist = (list_id) => {
       MediaService.getPlaylist(list_id).success((data) => {
+        if (!data || data.status === '0' || !Array.isArray(data.tracks)) {
+          notyf.info((data && data.reason) || '歌单加载失败，请稍后重试');
+          return;
+        }
         $scope.songs = data.tracks;
         $scope.current_list_id = list_id;
         l1Player.setNewPlaylist($scope.songs);

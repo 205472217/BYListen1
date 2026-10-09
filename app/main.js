@@ -621,6 +621,127 @@ ipcMain.handle("kuwoEnsureToken", (event, options) =>
   ensureKuwoToken(Boolean(options && options.force))
 );
 
+/**
+ * WebDAV 请求统一由主进程代发。
+ *
+ * 渲染进程跑在 file:// 下，直连 WebDAV 服务器会遇到两个死结：
+ * 1) 跨源请求受 CORS 限制，PROPFIND / MKCOL / PUT 都会先发 OPTIONS 预检，
+ *    绝大多数 WebDAV 服务不返回 Access-Control-Allow-* 头，预检必然失败；
+ * 2) 浏览器不允许脚本直接设置 Authorization 头（会被拦或降级）。
+ * 因此统一用主进程的 net.request 发请求，只有它才能真正控制方法与请求头。
+ */
+const WEBDAV_ALLOWED_METHODS = ["PROPFIND", "MKCOL", "GET", "PUT", "HEAD", "DELETE"];
+const WEBDAV_TIMEOUT = 20000;
+const WEBDAV_MAX_BODY = 8 * 1024 * 1024;
+// Chromium 的 URLLoader 把这些头列为受限头：一旦脚本设置，整个请求会直接以
+// net::ERR_INVALID_ARGUMENT 失败（注意不是抛异常，请求根本发不出去）。
+// 实测踩过：手工设 Content-Length 后服务端连 PUT 都收不到。
+const WEBDAV_FORBIDDEN_HEADERS = [
+  "content-length",
+  "host",
+  "connection",
+  "transfer-encoding",
+  "upgrade",
+  "expect",
+];
+
+function webdavBasicAuth(username, password) {
+  const raw = `${username}:${password || ""}`;
+  return `Basic ${Buffer.from(raw, "utf8").toString("base64")}`;
+}
+
+function webdavRequest(options) {
+  return new Promise((resolve) => {
+    const method = String((options && options.method) || "GET").toUpperCase();
+    const target = options && options.url;
+    if (typeof target !== "string" || target.length === 0) {
+      resolve({ ok: false, error: "invalid url" });
+      return;
+    }
+    if (!WEBDAV_ALLOWED_METHODS.includes(method)) {
+      resolve({ ok: false, error: `method not allowed: ${method}` });
+      return;
+    }
+
+    let settled = false;
+    const done = (result) => {
+      if (settled) return;
+      settled = true;
+      resolve(result);
+    };
+
+    let request;
+    try {
+      request = net.request({ method, url: target, redirect: "follow" });
+    } catch (error) {
+      done({ ok: false, error: String(error && error.message) });
+      return;
+    }
+
+    const headers = (options && options.headers) || {};
+    Object.keys(headers).forEach((key) => {
+      if (WEBDAV_FORBIDDEN_HEADERS.indexOf(String(key).toLowerCase()) !== -1) {
+        return;
+      }
+      try {
+        request.setHeader(key, headers[key]);
+      } catch (error) {
+        // 忽略不支持的头
+      }
+    });
+    if (options && options.username) {
+      request.setHeader(
+        "Authorization",
+        webdavBasicAuth(options.username, options.password)
+      );
+    }
+
+    const timer = setTimeout(() => {
+      try {
+        request.abort();
+      } catch (error) {
+        // 忽略
+      }
+      done({ ok: false, error: "timeout" });
+    }, WEBDAV_TIMEOUT);
+
+    request.on("response", (response) => {
+      const chunks = [];
+      let size = 0;
+      response.on("data", (chunk) => {
+        size += chunk.length;
+        if (size <= WEBDAV_MAX_BODY) chunks.push(chunk);
+      });
+      response.on("end", () => {
+        clearTimeout(timer);
+        done({
+          ok: true,
+          statusCode: response.statusCode,
+          headers: response.headers,
+          body: Buffer.concat(chunks).toString("utf8"),
+        });
+      });
+      response.on("error", (error) => {
+        clearTimeout(timer);
+        done({ ok: false, error: String(error && error.message) });
+      });
+    });
+
+    request.on("error", (error) => {
+      clearTimeout(timer);
+      done({ ok: false, error: String(error && error.message) });
+    });
+
+    const body = options && options.body;
+    if (body) {
+      request.write(body);
+    }
+    request.end();
+  });
+}
+
+ipcMain.handle("webdavRequest", (event, options) => webdavRequest(options));
+
 ipcMain.handle("getDownloadPath", () => ensureDirectory(getDownloadPath()));
 
 ipcMain.handle("chooseDownloadPath", async () => {
@@ -981,25 +1102,13 @@ function createWindow() {
   session.defaultSession.webRequest.onBeforeSendHeaders(
     filter,
     (details, callback) => {
+      hack_referer_header(details);
       if (
-        details.url.startsWith(
-          "https://listen1.github.io/listen1/callback.html?code="
-        )
+        details.resourceType === "media" ||
+        /\.(mp3|m4a|aac|flac|ogg|wav|webm)(?:\?|$)/i.test(details.url) ||
+        details.url.includes("bilivideo")
       ) {
-        const { url } = details;
-        const code = url.split("=")[1];
-        mainWindow.webContents.executeJavaScript(
-          'GithubClient.github.handleCallback("' + code + '");'
-        );
-      } else {
-        hack_referer_header(details);
-        if (
-          details.resourceType === "media" ||
-          /\.(mp3|m4a|aac|flac|ogg|wav|webm)(?:\?|$)/i.test(details.url) ||
-          details.url.includes("bilivideo")
-        ) {
-          rememberMediaRequest(details.url, details.requestHeaders);
-        }
+        rememberMediaRequest(details.url, details.requestHeaders);
       }
       callback({ cancel: false, requestHeaders: details.requestHeaders });
     }
@@ -1193,9 +1302,6 @@ function hack_referer_header(details) {
   }
   if (details.url.includes("://interface3.music.163.com/")) {
     referer_value = "http://music.163.com/";
-  }
-  if (details.url.includes("://gist.githubusercontent.com/")) {
-    referer_value = "https://gist.githubusercontent.com/";
   }
 
   if (details.url.includes(".xiami.com/")) {

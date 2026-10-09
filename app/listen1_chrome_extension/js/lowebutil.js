@@ -80,6 +80,46 @@ function cookieRemove(cookie, callback) {
   }
 }
 
+// ---------- localStorage 写入通知 ----------
+// 云同步用：设置项（主题/语言/播放设置…）的写入散落在各个 setter 里，
+// 与其逐个改造，不如在唯一的写入通道 localStorage.setObject 上挂一个观察点。
+// 合并云端数据时自己会大量写入，用 muteLocalStorageChange 包住避免自触发回推。
+const localStorageChangeCallbacks = [];
+let localStorageChangeMuted = 0;
+
+function onLocalStorageChange(callback) {
+  localStorageChangeCallbacks.push(callback);
+  return () => {
+    const index = localStorageChangeCallbacks.indexOf(callback);
+    if (index !== -1) {
+      localStorageChangeCallbacks.splice(index, 1);
+    }
+  };
+}
+
+function muteLocalStorageChange(fn) {
+  localStorageChangeMuted += 1;
+  try {
+    return fn();
+  } finally {
+    localStorageChangeMuted -= 1;
+  }
+}
+
+function notifyLocalStorageChange(key) {
+  if (localStorageChangeMuted > 0) {
+    return;
+  }
+  // 复制一份再遍历：观察者里可能会取消订阅
+  localStorageChangeCallbacks.slice().forEach((callback) => {
+    try {
+      callback(key);
+    } catch (error) {
+      // 观察者抛错不能影响写入本身
+    }
+  });
+}
+
 function setPrototypeOfLocalStorage() {
   const proto = Object.getPrototypeOf(localStorage);
   proto.getObject = function getObject(key) {
@@ -92,6 +132,7 @@ function setPrototypeOfLocalStorage() {
   };
   proto.setObject = function setObject(key, value) {
     this.setItem(key, JSON.stringify(value));
+    notifyLocalStorageChange(key);
   };
   Object.setPrototypeOf(localStorage, proto);
 }

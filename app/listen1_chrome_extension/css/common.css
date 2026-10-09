@@ -1234,15 +1234,35 @@ ul.detail-songlist li .tools .icon {
 }
 
 .page .settings-content .custom-proxy {
-  margin-top: 10px;
+  margin-top: 20px;
 }
 .page .settings-content .custom-proxy .rule-input {
-  margin-top: 8px;
+  display: flex;
+  align-items: center;
+  margin-top: 16px;
+}
+.page .settings-content .custom-proxy .rule-input:first-child {
+  margin-top: 0;
+}
+.page .settings-content .custom-proxy .rule-input .field-name {
+  flex: 0 0 160px;
+  width: 160px;
+  margin-right: 12px;
+  box-sizing: border-box;
 }
 .page .settings-content .custom-proxy input {
   margin-right: 15px;
   height: 24px;
-  width: 200px;
+  width: 320px;
+}
+.page .settings-content .webdav-status {
+  margin: 20px 0;
+}
+.page .settings-content .webdav-actions {
+  margin-bottom: 20px;
+}
+.page .settings-content .webdav-auto-sync {
+  align-items: center;
 }
 .page .settings-content .search-description {
   margin: 10px 0 5px 0;

@@ -237,6 +237,21 @@ const MediaService = {
     return myplaylist.show_myplaylist('my');
   },
 
+  // 备份/同步（本地文件与 WebDAV 共用）：歌单 + 设置类数据，
+  // 不含网盘凭据、下载记录、本地音乐扫描结果、当前播放队列
+  exportSyncPayload() {
+    return myplaylist.export_sync_payload();
+  },
+
+  mergeSyncPayload(remote, options) {
+    return myplaylist.merge_sync_payload(remote, options);
+  },
+
+  // 某个 localStorage key 是否参与同步（界面层判断写入是否值得回推）
+  isSyncableKey(key) {
+    return myplaylist.is_syncable_key(key);
+  },
+
   showPlaylistArray(source, offset, filter_id) {
     const provider = getProviderByName(source);
     const url = `/show_playlist?${queryStringify({ offset, filter_id })}`;

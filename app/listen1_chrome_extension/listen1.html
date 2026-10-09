@@ -43,8 +43,6 @@
     <script type="text/javascript" src="js/vendor/zhConvert.js"></script>
 
     <script type="text/javascript" src="js/lowebutil.js"></script>
-    <script type="text/javascript" src="js/github.js"></script>
-    <script type="text/javascript" src="js/lastfm.js"></script>
     <script type="text/javascript" src="js/provider/xiami.js"></script>
     <script type="text/javascript" src="js/provider/qq.js"></script>
     <script type="text/javascript" src="js/provider/netease.js"></script>
@@ -58,6 +56,7 @@
     <script type="text/javascript" src="js/bridge.js"></script>
     <script type="text/javascript" src="js/player_thread.js"></script>
     <script type="text/javascript" src="js/myplaylist.js"></script>
+    <script type="text/javascript" src="js/webdav.js"></script>
     <script type="text/javascript" src="js/loweb.js"></script>
     <script type="text/javascript" src="js/l1_player.js"></script>
     <script type="text/javascript" src="js/track_availability.js"></script>
@@ -185,24 +184,6 @@
                           </button>
                         </div>
                       </div>
-                      <div class="dialog-connect-lastfm" ng-show="dialog_type==4">
-                        <p>{{_OPENING_LASTFM_PAGE}}</p>
-                        <p>{{_CONFIRM_NOTICE_LASTFM}}</p>
-                        <div class="buttons">
-                          <button
-                            class="btn btn-primary confirm-button"
-                            ng-click="lastfm.updateStatus();closeDialog();"
-                          >
-                            {{_AUTHORIZED_FINISHED}}
-                          </button>
-                          <button
-                            class="btn btn-warning warning-button"
-                            ng-click="lastfm.getAuth();"
-                          >
-                            {{_AUTHORIZED_REOPEN}}
-                          </button>
-                        </div>
-                      </div>
                       <!-- open playlist dialog-->
                       <div class="dialog-open-url" ng-show="dialog_type==5">
                         <div class="form-group">
@@ -235,74 +216,6 @@
                         >
                           <img ng-src="{{ playlist.info.cover_img_url }}" />
                           <h2>{{ playlist.info.title }}</h2>
-                        </li>
-                      </ul>
-                      <div class="dialog-connect-github" ng-show="dialog_type==7">
-                        <p>{{_OPENING_GITHUB_PAGE}}</p>
-                        <p>{{_CONFIRM_NOTICE_GITHUB}}</p>
-                        <div class="buttons">
-                          <button
-                            class="btn btn-primary confirm-button"
-                            ng-click="updateGithubStatus();closeDialog();"
-                          >
-                            {{_AUTHORIZED_FINISHED}}
-                          </button>
-                          <button
-                            class="btn btn-warning warning-button"
-                            ng-click="openGithubAuth();"
-                          >
-                            {{_AUTHORIZED_REOPEN}}
-                          </button>
-                        </div>
-                      </div>
-                      <ul class="dialog-backuplist" ng-show="dialog_type==8">
-                        <li class="detail-add" ng-click="newDialogOption(9)">
-                          <img src="images/mycover.jpg" />
-                          <h2>{{_CREATE_PLAYLIST_BACKUP}}</h2>
-                        </li>
-                        <li
-                          ng-repeat="backup in myBackup track by $index"
-                          ng-class-odd="'odd'"
-                          ng-class-even="'even'"
-                          ng-click="backupMySettings2Gist(backup.id, backup.public); closeDialog();"
-                        >
-                          <img ng-src="images/mycover.jpg" />
-                          <h2>
-                            {{ backup.id }}<br />
-                            {{backup.description}}
-                          </h2>
-                        </li>
-                      </ul>
-                      <!-- create new backup dialog-->
-                      <div class="dialog-newbackup" ng-show="dialog_type==9">
-                        <button
-                          class="btn btn-primary confirm-button"
-                          ng-click="backupMySettings2Gist(null, true);closeDialog();"
-                        >
-                          {{_CREATE_PUBLIC_BACKUP}}
-                        </button>
-                        <button
-                          class="btn btn-primary confirm-button"
-                          ng-click="backupMySettings2Gist(null, false);closeDialog();"
-                        >
-                          {{_CREATE_PRIVATE_BACKUP}}
-                        </button>
-                        <button
-                          class="btn btn-default"
-                          ng-click="cancelNewDialog(8)"
-                        >
-                          {{_CANCEL}}
-                        </button>
-                      </div>
-                      <ul class="dialog-backuplist" ng-show="dialog_type==10">
-                        <li
-                          ng-repeat="backup in myBackup track by $index"
-                          ng-class-odd="'odd'"
-                          ng-class-even="'even'"
-                          ng-click="importMySettingsFromGist(backup.id); closeDialog();"
-                        >
-                          <img ng-src="images/mycover.jpg" />
-                          <h2>{{ backup.id }} {{backup.description}}</h2>
                         </li>
                       </ul>
                       <div class="dialog-open-login" ng-show="dialog_type==11">
@@ -894,7 +807,7 @@
                         <div
                           class="page"
                           ng-show="current_tag==4 && is_window_hidden==1"
-                          ng-init="lastfm.updateStatus(); updateGithubStatus();"
+                          ng-init="initWebdavSync()"
                         >
                           <div class="site-wrapper-innerd">
                             <div class="cover-container">
@@ -1229,13 +1142,6 @@
                                   >
                                     {{_EXPORT_TO_LOCAL_FILE}}
                                   </button>
-                                  <button
-                                    class="btn btn-primary confirm-button"
-                                    ng-show="githubStatus == 2"
-                                    ng-click="showDialog(8)"
-                                  >
-                                    {{_EXPORT_TO_GITHUB_GIST}}
-                                  </button>
                                 </div>
                               </div>
                               <div class="settings-title">
@@ -1252,72 +1158,90 @@
                                     custom-on-change="importMySettings"
                                   />{{_RECOVER_FROM_LOCAL_FILE}}
                                 </label>
-                                <button
-                                  class="btn btn-warning confirm-button"
-                                  ng-show="githubStatus == 2"
-                                  ng-click="showDialog(10)"
-                                >
-                                  {{_RECOVER_FROM_GITHUB_GIST}}
-                                </button>
                               </div>
     
                               <div class="settings-title">
-                                <span>{{_CONNECT_TO_GITHUB}}</span>
+                                <span>{{_WEBDAV_SYNC}}</span>
                               </div>
                               <div class="settings-content">
-                                <div>
-                                  <p>{{_STATUS}}：{{ githubStatusText }}</p>
+                                <p>{{_WEBDAV_INTRO}}</p>
+                                <div class="custom-proxy">
+                                  <div class="rule-input">
+                                    <div class="field-name">{{_WEBDAV_URL}}</div>
+                                    <input
+                                      type="text"
+                                      placeholder="{{webdavDefaultUrl}}"
+                                      ng-model="webdav.url"
+                                      ng-change="onWebdavConfigChange()"
+                                    />
+                                  </div>
+                                  <div class="rule-input">
+                                    <div class="field-name">{{_WEBDAV_USERNAME}}</div>
+                                    <input
+                                      type="text"
+                                      ng-model="webdav.username"
+                                      ng-change="onWebdavConfigChange()"
+                                    />
+                                  </div>
+                                  <div class="rule-input">
+                                    <div class="field-name">{{_WEBDAV_PASSWORD}}</div>
+                                    <input
+                                      type="password"
+                                      ng-model="webdav.password"
+                                      ng-change="onWebdavConfigChange()"
+                                    />
+                                  </div>
+                                </div>
+                                <p class="webdav-status">{{_STATUS}}：{{ webdavStatusText }}</p>
+                                <div class="webdav-actions">
                                   <button
                                     class="btn btn-primary confirm-button"
-                                    ng-show="githubStatus == 0"
-                                    ng-click="openGithubAuth(); showDialog(7);"
+                                    ng-disabled="webdavBusy"
+                                    ng-click="webdavConnect()"
                                   >
-                                    {{_CONNECT_TO_GITHUB}}
+                                    {{_WEBDAV_CONNECT}}
+                                  </button>
+                                  <button
+                                    class="btn btn-primary confirm-button"
+                                    ng-show="webdavConnected"
+                                    ng-disabled="webdavBusy"
+                                    ng-click="webdavUpload()"
+                                  >
+                                    {{_WEBDAV_UPLOAD}}
                                   </button>
                                   <button
                                     class="btn btn-warning confirm-button"
-                                    ng-show="githubStatus == 1"
-                                    ng-click="showDialog(7);"
+                                    ng-show="webdavConnected"
+                                    ng-disabled="webdavBusy"
+                                    ng-click="webdavDownload()"
                                   >
-                                    {{_RECONNECT}}
+                                    {{_WEBDAV_DOWNLOAD}}
                                   </button>
                                   <button
-                                    class="btn btn-primary confirm-button"
-                                    ng-show="githubStatus == 2"
-                                    ng-click="GithubLogout();"
+                                    class="btn btn-default confirm-button"
+                                    ng-show="webdavConnected"
+                                    ng-disabled="webdavBusy"
+                                    ng-click="webdavDisconnect()"
                                   >
                                     {{_CANCEL_CONNECT}}
                                   </button>
                                 </div>
-                              </div>
-    
-                              <div class="settings-title">
-                                <span>{{_CONNECT_TO_LASTFM}}</span>
-                              </div>
-                              <div class="settings-content">
-                                <div>
-                                  <p>{{_STATUS}}：{{ lastfm.getStatusText() }}</p>
-                                  <button
-                                    class="btn btn-primary confirm-button"
-                                    ng-show="!lastfm.isAuthRequested()"
-                                    ng-click="lastfm.getAuth(); showDialog(4);"
+                                <div class="shortcut webdav-auto-sync">
+                                  <svg
+                                    class="feather"
+                                    ng-show="!webdav.autoSync"
+                                    ng-click="toggleWebdavAutoSync()"
                                   >
-                                    {{_CONNECT_TO_LASTFM}}
-                                  </button>
-                                  <button
-                                    class="btn btn-warning confirm-button"
-                                    ng-show="lastfm.isAuthRequested() && !lastfm.isAuthorized()"
-                                    ng-click="lastfm.getAuth(); showDialog(4);"
+                                    <use href="#square"></use>
+                                  </svg>
+                                  <svg
+                                    class="feather"
+                                    ng-show="webdav.autoSync"
+                                    ng-click="toggleWebdavAutoSync()"
                                   >
-                                    {{_RECONNECT}}
-                                  </button>
-                                  <button
-                                    class="btn btn-primary confirm-button"
-                                    ng-show="lastfm.isAuthRequested()"
-                                    ng-click="lastfm.cancelAuth();"
-                                  >
-                                    {{_CANCEL_CONNECT}}
-                                  </button>
+                                    <use href="#check-square"></use>
+                                  </svg>
+                                  {{_WEBDAV_AUTO_SYNC}}
                                 </div>
                               </div>
                               <div class="settings-title">
@@ -2298,24 +2222,6 @@
                         </button>
                       </div>
                     </div>
-                    <div class="dialog-connect-lastfm" ng-show="dialog_type==4">
-                      <p>{{_OPENING_LASTFM_PAGE}}</p>
-                      <p>{{_CONFIRM_NOTICE_LASTFM}}</p>
-                      <div class="buttons">
-                        <button
-                          class="btn btn-primary confirm-button"
-                          ng-click="lastfm.updateStatus();closeDialog();"
-                        >
-                          {{_AUTHORIZED_FINISHED}}
-                        </button>
-                        <button
-                          class="btn btn-warning warning-button"
-                          ng-click="lastfm.getAuth();"
-                        >
-                          {{_AUTHORIZED_REOPEN}}
-                        </button>
-                      </div>
-                    </div>
                     <!-- open playlist dialog-->
                     <div class="dialog-open-url" ng-show="dialog_type==5">
                       <div class="form-group">
@@ -2348,74 +2254,6 @@
                       >
                         <img err-src="https://y.gtimg.cn/mediastyle/global/img/playlist_300.png" ng-src="{{ playlist.info.cover_img_url }}" />
                         <h2>{{ playlist.info.title }}</h2>
-                      </li>
-                    </ul>
-                    <div class="dialog-connect-github" ng-show="dialog_type==7">
-                      <p>{{_OPENING_GITHUB_PAGE}}</p>
-                      <p>{{_CONFIRM_NOTICE_GITHUB}}</p>
-                      <div class="buttons">
-                        <button
-                          class="btn btn-primary confirm-button"
-                          ng-click="updateGithubStatus();closeDialog();"
-                        >
-                          {{_AUTHORIZED_FINISHED}}
-                        </button>
-                        <button
-                          class="btn btn-warning warning-button"
-                          ng-click="openGithubAuth();"
-                        >
-                          {{_AUTHORIZED_REOPEN}}
-                        </button>
-                      </div>
-                    </div>
-                    <ul class="dialog-backuplist" ng-show="dialog_type==8">
-                      <li class="detail-add" ng-click="newDialogOption(9)">
-                        <img err-src="https://y.gtimg.cn/mediastyle/global/img/playlist_300.png" src="images/mycover.jpg" />
-                        <h2>{{_CREATE_PLAYLIST_BACKUP}}</h2>
-                      </li>
-                      <li
-                        ng-repeat="backup in myBackup track by $index"
-                        ng-class-odd="'odd'"
-                        ng-class-even="'even'"
-                        ng-click="backupMySettings2Gist(backup.id, backup.public); closeDialog();"
-                      >
-                        <img err-src="https://y.gtimg.cn/mediastyle/global/img/playlist_300.png" ng-src="images/mycover.jpg" />
-                        <h2>
-                          {{ backup.id }}<br />
-                          {{backup.description}}
-                        </h2>
-                      </li>
-                    </ul>
-                    <!-- create new backup dialog-->
-                    <div class="dialog-newbackup" ng-show="dialog_type==9">
-                      <button
-                        class="btn btn-primary confirm-button"
-                        ng-click="backupMySettings2Gist(null, true);closeDialog();"
-                      >
-                        {{_CREATE_PUBLIC_BACKUP}}
-                      </button>
-                      <button
-                        class="btn btn-primary confirm-button"
-                        ng-click="backupMySettings2Gist(null, false);closeDialog();"
-                      >
-                        {{_CREATE_PRIVATE_BACKUP}}
-                      </button>
-                      <button
-                        class="btn btn-default"
-                        ng-click="cancelNewDialog(8)"
-                      >
-                        {{_CANCEL}}
-                      </button>
-                    </div>
-                    <ul class="dialog-backuplist" ng-show="dialog_type==10">
-                      <li
-                        ng-repeat="backup in myBackup track by $index"
-                        ng-class-odd="'odd'"
-                        ng-class-even="'even'"
-                        ng-click="importMySettingsFromGist(backup.id); closeDialog();"
-                      >
-                        <img err-src="https://y.gtimg.cn/mediastyle/global/img/playlist_300.png" ng-src="images/mycover.jpg" />
-                        <h2>{{ backup.id }} {{backup.description}}</h2>
                       </li>
                     </ul>
                     <div class="dialog-open-login" ng-show="dialog_type==11">
@@ -3081,7 +2919,7 @@
                       <div
                         class="page"
                         ng-show="current_tag==4 && is_window_hidden==1"
-                        ng-init="lastfm.updateStatus(); updateGithubStatus();"
+                        ng-init="initWebdavSync()"
                       >
                         <div class="site-wrapper-innerd">
                           <div class="cover-container">
@@ -3410,13 +3248,6 @@
                                 >
                                   {{_EXPORT_TO_LOCAL_FILE}}
                                 </button>
-                                <button
-                                  class="btn btn-primary confirm-button"
-                                  ng-show="githubStatus == 2"
-                                  ng-click="showDialog(8)"
-                                >
-                                  {{_EXPORT_TO_GITHUB_GIST}}
-                                </button>
                               </div>
                             </div>
                             <div class="settings-title">
@@ -3433,72 +3264,90 @@
                                   custom-on-change="importMySettings"
                                 />{{_RECOVER_FROM_LOCAL_FILE}}
                               </label>
-                              <button
-                                class="btn btn-warning confirm-button"
-                                ng-show="githubStatus == 2"
-                                ng-click="showDialog(10)"
-                              >
-                                {{_RECOVER_FROM_GITHUB_GIST}}
-                              </button>
                             </div>
 
                             <div class="settings-title">
-                              <span>{{_CONNECT_TO_GITHUB}}</span>
+                              <span>{{_WEBDAV_SYNC}}</span>
                             </div>
                             <div class="settings-content">
-                              <div>
-                                <p>{{_STATUS}}：{{ githubStatusText }}</p>
+                              <p>{{_WEBDAV_INTRO}}</p>
+                              <div class="custom-proxy">
+                                <div class="rule-input">
+                                  <div class="field-name">{{_WEBDAV_URL}}</div>
+                                  <input
+                                    type="text"
+                                    placeholder="{{webdavDefaultUrl}}"
+                                    ng-model="webdav.url"
+                                    ng-change="onWebdavConfigChange()"
+                                  />
+                                </div>
+                                <div class="rule-input">
+                                  <div class="field-name">{{_WEBDAV_USERNAME}}</div>
+                                  <input
+                                    type="text"
+                                    ng-model="webdav.username"
+                                    ng-change="onWebdavConfigChange()"
+                                  />
+                                </div>
+                                <div class="rule-input">
+                                  <div class="field-name">{{_WEBDAV_PASSWORD}}</div>
+                                  <input
+                                    type="password"
+                                    ng-model="webdav.password"
+                                    ng-change="onWebdavConfigChange()"
+                                  />
+                                </div>
+                              </div>
+                              <p class="webdav-status">{{_STATUS}}：{{ webdavStatusText }}</p>
+                              <div class="webdav-actions">
                                 <button
                                   class="btn btn-primary confirm-button"
-                                  ng-show="githubStatus == 0"
-                                  ng-click="openGithubAuth(); showDialog(7);"
+                                  ng-disabled="webdavBusy"
+                                  ng-click="webdavConnect()"
                                 >
-                                  {{_CONNECT_TO_GITHUB}}
+                                  {{_WEBDAV_CONNECT}}
+                                </button>
+                                <button
+                                  class="btn btn-primary confirm-button"
+                                  ng-show="webdavConnected"
+                                  ng-disabled="webdavBusy"
+                                  ng-click="webdavUpload()"
+                                >
+                                  {{_WEBDAV_UPLOAD}}
                                 </button>
                                 <button
                                   class="btn btn-warning confirm-button"
-                                  ng-show="githubStatus == 1"
-                                  ng-click="showDialog(7);"
+                                  ng-show="webdavConnected"
+                                  ng-disabled="webdavBusy"
+                                  ng-click="webdavDownload()"
                                 >
-                                  {{_RECONNECT}}
+                                  {{_WEBDAV_DOWNLOAD}}
                                 </button>
                                 <button
-                                  class="btn btn-primary confirm-button"
-                                  ng-show="githubStatus == 2"
-                                  ng-click="GithubLogout();"
+                                  class="btn btn-default confirm-button"
+                                  ng-show="webdavConnected"
+                                  ng-disabled="webdavBusy"
+                                  ng-click="webdavDisconnect()"
                                 >
                                   {{_CANCEL_CONNECT}}
                                 </button>
                               </div>
-                            </div>
-
-                            <div class="settings-title">
-                              <span>{{_CONNECT_TO_LASTFM}}</span>
-                            </div>
-                            <div class="settings-content">
-                              <div>
-                                <p>{{_STATUS}}：{{ lastfm.getStatusText() }}</p>
-                                <button
-                                  class="btn btn-primary confirm-button"
-                                  ng-show="!lastfm.isAuthRequested()"
-                                  ng-click="lastfm.getAuth(); showDialog(4);"
+                              <div class="shortcut webdav-auto-sync">
+                                <svg
+                                  class="feather"
+                                  ng-show="!webdav.autoSync"
+                                  ng-click="toggleWebdavAutoSync()"
                                 >
-                                  {{_CONNECT_TO_LASTFM}}
-                                </button>
-                                <button
-                                  class="btn btn-warning confirm-button"
-                                  ng-show="lastfm.isAuthRequested() && !lastfm.isAuthorized()"
-                                  ng-click="lastfm.getAuth(); showDialog(4);"
+                                  <use href="#square"></use>
+                                </svg>
+                                <svg
+                                  class="feather"
+                                  ng-show="webdav.autoSync"
+                                  ng-click="toggleWebdavAutoSync()"
                                 >
-                                  {{_RECONNECT}}
-                                </button>
-                                <button
-                                  class="btn btn-primary confirm-button"
-                                  ng-show="lastfm.isAuthRequested()"
-                                  ng-click="lastfm.cancelAuth();"
-                                >
-                                  {{_CANCEL_CONNECT}}
-                                </button>
+                                  <use href="#check-square"></use>
+                                </svg>
+                                {{_WEBDAV_AUTO_SYNC}}
                               </div>
                             </div>
                             <div class="settings-title">

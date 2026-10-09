@@ -1,5 +1,4 @@
 /* eslint-disable no-unused-vars */
-/* global GithubClient */
 chrome.action.onClicked.addListener((tab) => {
   chrome.tabs.create(
     {
@@ -29,9 +28,6 @@ chrome.action.onClicked.addListener((tab) => {
 //   }
 //   if (details.url.includes('://interface3.music.163.com/')) {
 //     referer_value = 'https://music.163.com/';
-//   }
-//   if (details.url.includes('://gist.githubusercontent.com/')) {
-//     referer_value = 'https://gist.githubusercontent.com/';
 //   }
 
 //   if (details.url.includes('.xiami.com/')) {
@@ -176,7 +172,6 @@ chrome.action.onClicked.addListener((tab) => {
 //   '*://*.bilivideo.com/*',
 //   '*://*.bilivideo.cn/*',
 //   '*://*.migu.cn/*',
-//   '*://*.githubusercontent.com/*',
 // ];
 
 // try {
@@ -197,17 +192,3 @@ chrome.action.onClicked.addListener((tab) => {
 //     ['requestHeaders', 'blocking']
 //   );
 // }
-
-
-/**
- * Get tokens.
- */
-
-chrome.runtime.onMessage.addListener((request, sender, sendResponse) => {
-  if (request.type !== 'code') {
-    return;
-  }
-
-  GithubClient.github.handleCallback(request.code);
-  sendResponse();
-});

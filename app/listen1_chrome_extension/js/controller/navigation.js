@@ -3,7 +3,7 @@
 /* eslint-disable no-shadow */
 /* eslint-disable no-unused-vars */
 /* eslint-disable no-param-reassign */
-/* global angular notyf i18next MediaService l1Player hotkeys isElectron require GithubClient lastfm */
+/* global angular notyf i18next MediaService l1Player hotkeys isElectron require WebdavClient onLocalStorageChange */
 // control main view of page, it can be called any place
 angular.module('listenone').controller('NavigationController', [
   '$scope',
@@ -26,8 +26,6 @@ angular.module('listenone').controller('NavigationController', [
     $scope.dialog_title = '';
 
     $scope.isDoubanLogin = false;
-
-    $scope.lastfm = lastfm;
 
     $scope.isOpenSidebar = true;
 
@@ -293,9 +291,6 @@ angular.module('listenone').controller('NavigationController', [
         $scope.dialog_cover_img_url = data.cover_img_url;
         $scope.dialog_playlist_title = data.playlist_title;
       }
-      if (dialog_type === 4) {
-        $scope.dialog_title = i18next.t('_CONNECT_TO_LASTFM');
-      }
       if (dialog_type === 5) {
         $scope.dialog_title = i18next.t('_OPEN_PLAYLIST');
       }
@@ -304,31 +299,6 @@ angular.module('listenone').controller('NavigationController', [
         MediaService.showMyPlaylist().success((res) => {
           $scope.myplaylist = res.result;
         });
-      }
-      if (dialog_type === 7) {
-        $scope.dialog_title = i18next.t('_CONNECT_TO_GITHUB');
-      }
-      if (dialog_type === 8) {
-        $scope.dialog_title = i18next.t('_EXPORT_TO_GITHUB_GIST');
-        GithubClient.gist.listExistBackup().then(
-          (res) => {
-            $scope.myBackup = res;
-          },
-          (err) => {
-            $scope.myBackup = [];
-          }
-        );
-      }
-      if (dialog_type === 10) {
-        $scope.dialog_title = i18next.t('_RECOVER_FROM_GITHUB_GIST');
-        GithubClient.gist.listExistBackup().then(
-          (res) => {
-            $scope.myBackup = res;
-          },
-          (err) => {
-            $scope.myBackup = [];
-          }
-        );
       }
       if (dialog_type === 11) {
         $scope.dialog_title = i18next.t('_LOGIN');
@@ -576,10 +546,6 @@ angular.module('listenone').controller('NavigationController', [
     $scope.closeDialog = () => {
       $scope.is_dialog_hidden = 1;
       $scope.dialog_type = 0;
-      // update lastfm status if not authorized
-      if (lastfm.isAuthRequested()) {
-        lastfm.updateStatus();
-      }
     };
 
     $scope.setCurrentList = (list_id) => {
@@ -631,13 +597,11 @@ angular.module('listenone').controller('NavigationController', [
       link.remove();
     };
 
+    // 本地文件备份与恢复：与 WebDAV 用同一份载荷。
+    // 内容 = 歌单 + 主题/语言/播放设置等设置项；
+    // 网盘凭据、下载记录、本地音乐扫描结果、当前播放队列不写入文件。
     $scope.backupMySettings = () => {
-      const items = {};
-      Object.keys(localStorage).forEach((key) => {
-        items[key] = localStorage.getObject(key);
-      });
-
-      const content = JSON.stringify(items);
+      const content = JSON.stringify(MediaService.exportSyncPayload());
       $scope.downloadFile('listen1_backup.json', 'application/json', content);
     };
 
@@ -649,80 +613,321 @@ angular.module('listenone').controller('NavigationController', [
       }
       const reader = new FileReader();
       reader.onloadend = (readerEvent) => {
-        if (readerEvent.target.readyState === FileReader.DONE) {
-          const data_json = readerEvent.target.result;
-          // parse json
-          let data = null;
-          try {
-            data = JSON.parse(data_json);
-          } catch (e) {
-            notyf.warning('备份文件格式错误，请重新选择');
-            return;
-          }
-
-          Object.keys(data).forEach((item) =>
-            localStorage.setObject(item, data[item])
-          );
-          $rootScope.$broadcast('myplaylist:update');
-          notyf.success('成功导入我的歌单');
+        if (readerEvent.target.readyState !== FileReader.DONE) {
+          return;
         }
+        const data_json = readerEvent.target.result;
+        // parse json
+        let data = null;
+        try {
+          data = JSON.parse(data_json);
+        } catch (e) {
+          notyf.warning('备份文件格式错误，请重新选择');
+          return;
+        }
+
+        // 兼容两种格式：新版 {version, items} 与早期的扁平 {key: value}。
+        // 恢复是用户主动动作，设置项以文件为准；歌单仍走合并（不覆盖本机已有歌单）。
+        const payload =
+          data && typeof data === 'object' && data.items
+            ? data
+            : { version: 1, items: data };
+        applyWebdavMergeResult(
+          MediaService.mergeSyncPayload(payload, { preferRemote: true })
+        );
+        notyf.success(i18next.t('_IMPORTING_PLAYLIST_SUCCESS'));
       };
       reader.readAsText(fileObject);
     };
 
-    $scope.gistBackupLoading = false;
-    $scope.backupMySettings2Gist = (gistId, isPublic) => {
-      const items = {};
-      Object.keys(localStorage).forEach((key) => {
-        if (key !== 'gistid' && key !== 'githubOauthAccessKey') {
-          // avoid token leak
-          items[key] = localStorage.getObject(key);
-        }
-      });
-      const gistFiles = GithubClient.gist.json2gist(items);
-      $scope.gistBackupLoading = true;
-      GithubClient.gist.backupMySettings2Gist(gistFiles, gistId, isPublic).then(
-        () => {
-          notyf.dismissAll();
-          notyf.success('成功导出我的歌单到Gist');
-          $scope.gistBackupLoading = false;
-        },
-        (err) => {
-          notyf.dismissAll();
-          notyf.warning('导出我的歌单失败，检查后重试');
-          $scope.gistBackupLoading = false;
-        }
-      );
-      notyf.info('正在导出我的歌单到Gist...');
+    // ---------- 云同步（WebDAV） ----------
+    // 采用「双向合并」语义：无论点哪个方向，都先把云端与本机按 key 合并，
+    // 再把结果写回目标一侧，因此两台设备都不会因为覆盖而丢歌单。
+    const WEBDAV_PUSH_DELAY = 5000;
+    let webdavPushTimer = null;
+    let webdavSyncing = false;
+    let webdavLastHash = null;
+
+    $scope.webdav = WebdavClient.getConfig();
+    $scope.webdavDefaultUrl = WebdavClient.getDefaultUrl();
+    $scope.webdavConnected = false;
+    $scope.webdavBusy = false;
+    $scope.webdavLastSyncAt = WebdavClient.getLastSyncAt();
+
+    const refreshWebdavStatus = () => {
+      if (!WebdavClient.hasConfig()) {
+        $scope.webdavStatusText = i18next.t('_WEBDAV_NOT_CONFIGURED');
+        return;
+      }
+      if ($scope.webdavConnected) {
+        const at = $scope.webdavLastSyncAt
+          ? new Date($scope.webdavLastSyncAt).toLocaleString()
+          : '';
+        $scope.webdavStatusText = at
+          ? `${i18next.t('_WEBDAV_CONNECTED')}（${i18next.t(
+              '_WEBDAV_LAST_SYNC'
+            )} ${at}）`
+          : i18next.t('_WEBDAV_CONNECTED');
+      } else {
+        $scope.webdavStatusText = i18next.t('_WEBDAV_DISCONNECTED');
+      }
     };
 
-    $scope.gistRestoreLoading = false;
-    $scope.importMySettingsFromGist = (gistId) => {
-      $scope.gistRestoreLoading = true;
-      GithubClient.gist.importMySettingsFromGist(gistId).then(
-        (raw) => {
-          GithubClient.gist.gist2json(raw, (data) => {
-            Object.keys(data).forEach((item) =>
-              localStorage.setObject(item, data[item])
-            );
-            notyf.dismissAll();
-            notyf.success('导入我的歌单成功');
-            $scope.gistRestoreLoading = false;
-            $rootScope.$broadcast('myplaylist:update');
-          });
-        },
-        (err) => {
-          notyf.dismissAll();
-          if (err === 404) {
-            notyf.warning('未找到备份歌单，请先备份');
-          } else {
-            notyf.warning('导入我的歌单失败，检查后重试');
-          }
-          $scope.gistRestoreLoading = false;
-        }
-      );
-      notyf.info('正在从Gist导入我的歌单...');
+    const webdavPayloadHash = (payload) => {
+      const json = JSON.stringify(payload);
+      let hash = 0;
+      for (let i = 0; i < json.length; i += 1) {
+        hash = (hash * 31 + json.charCodeAt(i)) | 0;
+      }
+      return hash;
     };
+
+    // 合并结果的落地：只有真正变了的类别才广播，避免无谓的重绘与回推。
+    const applyWebdavMergeResult = (result) => {
+      if (!result) {
+        return;
+      }
+      if (result.playlist_changed) {
+        $rootScope.$broadcast('myplaylist:update');
+        $rootScope.$broadcast('favoriteplaylist:update');
+      }
+      if (
+        Array.isArray(result.changed_settings) &&
+        result.changed_settings.length > 0
+      ) {
+        $rootScope.$broadcast('settings:synced', result.changed_settings);
+      }
+    };
+
+    // 同步过来的设置立即生效：主题/语言由 ProfileController 应用，
+    // 播放类设置由 PlayController 重新 loadLocalSettings，
+    // 侧边栏由本控制器自己恢复。
+    $rootScope.$on('settings:synced', (event, keys) => {
+      if (!Array.isArray(keys) || keys.indexOf('openSidebar') === -1) {
+        return;
+      }
+      const isOpen = localStorage.getObject('openSidebar');
+      if (isOpen !== null) {
+        $scope.isOpenSidebar = isOpen;
+      }
+    });
+
+    const scheduleWebdavPush = () => {
+      if (!$scope.webdav.autoSync) {
+        return;
+      }
+      if (webdavPushTimer) {
+        $timeout.cancel(webdavPushTimer);
+      }
+      webdavPushTimer = $timeout(() => {
+        webdavPushTimer = null;
+        if (!$scope.webdavConnected || webdavSyncing) {
+          return;
+        }
+        $scope.webdavUpload(true);
+      }, WEBDAV_PUSH_DELAY);
+    };
+
+    $rootScope.$on('myplaylist:update', () => scheduleWebdavPush());
+    $rootScope.$on('favoriteplaylist:update', () => scheduleWebdavPush());
+
+    // 设置项改动也要回推：主题/语言/播放设置的写入散落在各个 setter 里，
+    // 这里统一挂在 localStorage 写入通道上，只有参与同步的 key 才触发。
+    // 歌单改动另有上面的广播，重复触发时 scheduleWebdavPush 会重置防抖计时。
+    onLocalStorageChange((key) => {
+      if (!MediaService.isSyncableKey(key)) {
+        return;
+      }
+      scheduleWebdavPush();
+    });
+
+    const startWebdavAutoSync = () => {
+      if (!WebdavClient.hasConfig() || !$scope.webdav.autoSync) {
+        return;
+      }
+      if (webdavSyncing) {
+        return;
+      }
+      // 启动/首次连接时静默拉取一次云端
+      $scope.webdavDownload(true);
+    };
+
+    $scope.initWebdavSync = () => {
+      $scope.webdav = WebdavClient.getConfig();
+      $scope.webdavLastSyncAt = WebdavClient.getLastSyncAt();
+      refreshWebdavStatus();
+      if (!WebdavClient.hasConfig()) {
+        return;
+      }
+      WebdavClient.testConnection((ok) => {
+        $scope.$evalAsync(() => {
+          $scope.webdavConnected = ok;
+          refreshWebdavStatus();
+          if (ok && $scope.webdav.autoSync) {
+            startWebdavAutoSync();
+          }
+        });
+      });
+    };
+
+    $scope.saveWebdavConfig = () => {
+      WebdavClient.saveConfig($scope.webdav);
+    };
+
+    $scope.onWebdavConfigChange = () => {
+      WebdavClient.saveConfig($scope.webdav);
+      $scope.webdavConnected = false;
+      refreshWebdavStatus();
+    };
+
+    $scope.toggleWebdavAutoSync = () => {
+      $scope.webdav.autoSync = !$scope.webdav.autoSync;
+      WebdavClient.saveConfig($scope.webdav);
+      if (!$scope.webdav.autoSync && webdavPushTimer) {
+        $timeout.cancel(webdavPushTimer);
+        webdavPushTimer = null;
+      }
+      refreshWebdavStatus();
+    };
+
+    $scope.webdavConnect = () => {
+      if (!WebdavClient.hasConfig()) {
+        notyf.warning(i18next.t('_WEBDAV_NEED_CONFIG'));
+        return;
+      }
+      WebdavClient.saveConfig($scope.webdav);
+      $scope.webdavBusy = true;
+      refreshWebdavStatus();
+      notyf.dismissAll();
+      notyf.info(i18next.t('_WEBDAV_TESTING'));
+      WebdavClient.testConnection((ok) => {
+        $scope.$evalAsync(() => {
+          $scope.webdavBusy = false;
+          $scope.webdavConnected = ok;
+          refreshWebdavStatus();
+          notyf.dismissAll();
+          if (ok) {
+            notyf.success(i18next.t('_WEBDAV_CONNECT_SUCCESS'));
+            if ($scope.webdav.autoSync) {
+              startWebdavAutoSync();
+            }
+          } else {
+            notyf.warning(i18next.t('_WEBDAV_CONNECT_FAILED'));
+          }
+        });
+      });
+    };
+
+    $scope.webdavUpload = (silent) => {
+      if (webdavSyncing) {
+        return;
+      }
+      webdavSyncing = true;
+      if (!silent) {
+        $scope.webdavBusy = true;
+        refreshWebdavStatus();
+        notyf.dismissAll();
+        notyf.info(i18next.t('_WEBDAV_UPLOADING'));
+      }
+      // 先拉云端并合并，避免覆盖另一台设备刚写入的数据。
+      // 上传方向：设置项以本机为准（刚改的主题/设置不能被云端旧值改回去）。
+      WebdavClient.pull((pullRes) => {
+        if (pullRes.ok && pullRes.found && pullRes.data) {
+          applyWebdavMergeResult(MediaService.mergeSyncPayload(pullRes.data));
+        }
+        const payload = MediaService.exportSyncPayload();
+        const hash = webdavPayloadHash(payload);
+        if (silent && hash === webdavLastHash) {
+          webdavSyncing = false;
+          return;
+        }
+        WebdavClient.push(payload, (pushRes) => {
+          webdavSyncing = false;
+          $scope.$evalAsync(() => {
+            $scope.webdavBusy = false;
+            $scope.webdavConnected = pushRes.ok;
+            if (pushRes.ok) {
+              webdavLastHash = hash;
+              $scope.webdavLastSyncAt = Date.now();
+              WebdavClient.setLastSyncAt($scope.webdavLastSyncAt);
+            }
+            refreshWebdavStatus();
+            if (silent) {
+              return;
+            }
+            notyf.dismissAll();
+            if (pushRes.ok) {
+              notyf.success(i18next.t('_WEBDAV_UPLOAD_SUCCESS'));
+            } else {
+              notyf.warning(i18next.t('_WEBDAV_UPLOAD_FAILED'));
+            }
+          });
+        });
+      });
+    };
+
+    $scope.webdavDownload = (silent) => {
+      if (webdavSyncing) {
+        return;
+      }
+      webdavSyncing = true;
+      if (!silent) {
+        $scope.webdavBusy = true;
+        refreshWebdavStatus();
+        notyf.dismissAll();
+        notyf.info(i18next.t('_WEBDAV_DOWNLOADING'));
+      }
+      WebdavClient.pull((pullRes) => {
+        webdavSyncing = false;
+        let mergeResult = null;
+        if (pullRes.ok && pullRes.found && pullRes.data) {
+          // 下载方向：设置项以云端为准（换台设备要的就是云端那份设置）
+          mergeResult = MediaService.mergeSyncPayload(pullRes.data, {
+            preferRemote: true,
+          });
+          applyWebdavMergeResult(mergeResult);
+          webdavLastHash = webdavPayloadHash(MediaService.exportSyncPayload());
+        }
+        $scope.$evalAsync(() => {
+          $scope.webdavBusy = false;
+          $scope.webdavConnected = pullRes.ok;
+          if (pullRes.ok && pullRes.found) {
+            $scope.webdavLastSyncAt = Date.now();
+            WebdavClient.setLastSyncAt($scope.webdavLastSyncAt);
+          }
+          refreshWebdavStatus();
+          if (silent) {
+            return;
+          }
+          notyf.dismissAll();
+          if (!pullRes.ok) {
+            notyf.warning(i18next.t('_WEBDAV_DOWNLOAD_FAILED'));
+          } else if (!pullRes.found) {
+            notyf.warning(i18next.t('_WEBDAV_NO_BACKUP'));
+          } else {
+            notyf.success(i18next.t('_WEBDAV_DOWNLOAD_SUCCESS'));
+          }
+        });
+      });
+    };
+
+    $scope.webdavDisconnect = () => {
+      if (webdavPushTimer) {
+        $timeout.cancel(webdavPushTimer);
+        webdavPushTimer = null;
+      }
+      WebdavClient.clearConfig();
+      $scope.webdav = WebdavClient.getConfig();
+      $scope.webdavConnected = false;
+      $scope.webdavBusy = false;
+      $scope.webdavLastSyncAt = 0;
+      webdavLastHash = null;
+      refreshWebdavStatus();
+      notyf.dismissAll();
+      notyf.success(i18next.t('_WEBDAV_DISCONNECTED'));
+    };
+
+    refreshWebdavStatus();
 
     $scope.showShortcuts = () => {};
 

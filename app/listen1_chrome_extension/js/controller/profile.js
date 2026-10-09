@@ -5,7 +5,8 @@
 /* global angular i18next sourceList platformSourceList */
 angular.module('listenone').controller('ProfileController', [
   '$scope',
-  ($scope) => {
+  '$rootScope',
+  ($scope, $rootScope) => {
     let defaultLang = 'zh-CN';
     const supportLangs = ['zh-CN', 'en-US'];
     if (supportLangs.indexOf(navigator.language) !== -1) {
@@ -66,11 +67,6 @@ angular.module('listenone').controller('ProfileController', [
     };
 
     $scope.initProfile = () => {
-      const url = `https://api.github.com/repos/listen1/listen1_chrome_extension/releases/latest`;
-      axios.get(url).then((response) => {
-        $scope.lastestVersion = response.data.tag_name;
-      });
-
       $scope.getProxyConfig();
     };
 
@@ -149,5 +145,24 @@ angular.module('listenone').controller('ProfileController', [
       });
     };
     $scope.setTheme(defaultTheme);
+
+    // 云同步/本地恢复带进来的主题与语言要立刻生效，不必重启应用
+    $rootScope.$on('settings:synced', (event, keys) => {
+      if (!Array.isArray(keys)) {
+        return;
+      }
+      if (keys.indexOf('theme') !== -1) {
+        const theme = localStorage.getObject('theme');
+        if (theme !== null) {
+          $scope.setTheme(theme);
+        }
+      }
+      if (keys.indexOf('language') !== -1) {
+        const lang = localStorage.getObject('language');
+        if (lang !== null) {
+          $scope.setLang(lang);
+        }
+      }
+    });
   },
 ]);

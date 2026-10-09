@@ -1,4 +1,4 @@
-/* global async LRUCache setPrototypeOfLocalStorage getLocalStorageValue */
+/* global async LRUCache setPrototypeOfLocalStorage getLocalStorageValue i18next */
 /* global netease xiami qq kugou kuwo bilibili migu taihe localmusic myplaylist */
 
 const PROVIDERS = [
@@ -329,7 +329,7 @@ const MediaService = {
           }
           reply(playlist);
         }),
-      () => ({ status: '0', reason: '歌单加载超时，请稍后重试' })
+      () => ({ status: '0', reason: i18next.t('_PLAYLIST_LOAD_TIMEOUT') })
     );
   },
 

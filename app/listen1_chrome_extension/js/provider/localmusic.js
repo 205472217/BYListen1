@@ -1,13 +1,14 @@
 /* eslint-disable no-param-reassign */
 /* eslint-disable no-unused-vars */
-/* global getParameterByName toSimplified */
+/* global getParameterByName toSimplified i18next */
 const defaultLocalMusicCover = 'images/mycover.jpg';
 const defaultLocalMusicPlaylist = {
   tracks: [],
   info: {
     id: 'lmplaylist_reserve',
     cover_img_url: defaultLocalMusicCover,
-    title: '本地音乐',
+    // 仅作占位：界面上的歌单标题由 `playlist_title` 过滤器按当前语言实时渲染
+    title: 'Local Music',
     source_url: '',
   },
 };
@@ -18,7 +19,8 @@ const localLyricSources = [
   { index: 2, name: 'LRCLIB' },
   { index: 3, name: 'XMS' },
 ];
-const localLyricEmptyMessage = '当前源未搜索到歌词，请切换搜索源';
+// 语言在运行时才确定，这里延迟到使用时再取翻译文案（模块加载时 i18next 还没就绪）
+const getLocalLyricEmptyMessage = () => i18next.t('_LYRIC_SOURCE_NOT_FOUND');
 const localLyricRequestVersions = {};
 const localLyricSelectionVersions = {};
 
@@ -62,7 +64,8 @@ class localmusic {
           playlist = JSON.parse(JSON.stringify(defaultLocalMusicPlaylist));
           playlist.info.id = list_id;
           if (list_id === 'lmplaylist_downloaded') {
-            playlist.info.title = '已下载';
+            // 兜底标题，展示时同样由 `playlist_title` 过滤器接管
+            playlist.info.title = i18next.t('_DOWNLOADED');
           }
         }
         localmusic.lm_apply_default_covers(playlist);
@@ -249,7 +252,7 @@ class localmusic {
   static lm_empty_lyric_result(status) {
     return {
       status,
-      lyric: localLyricEmptyMessage,
+      lyric: getLocalLyricEmptyMessage(),
     };
   }
 
@@ -569,7 +572,7 @@ class localmusic {
           playlist.tracks.find((item) => item.id === track_id);
         if (!track || !source) {
           return fn({
-            lyric: localLyricEmptyMessage,
+            lyric: getLocalLyricEmptyMessage(),
             tlyric: '',
             img_url: track ? track.img_url || '' : '',
             lyric_sources: localmusic.lm_get_lyric_sources(),

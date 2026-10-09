@@ -1,6 +1,6 @@
 /* eslint-disable no-underscore-dangle */
 /* eslint-disable no-unused-vars */
-/* global getParameterByName forge */
+/* global getParameterByName forge i18next */
 /* global isElectron cookieSet cookieGet cookieRemove async */
 class netease {
   static _create_secret_key(size) {
@@ -360,7 +360,7 @@ class netease {
               if (!playlist_info) {
                 return fn({
                   status: '0',
-                  reason: '网易云歌单暂时无法加载（可能需要登录，或该歌单已下架）',
+                  reason: i18next.t('_NETEASE_PLAYLIST_UNAVAILABLE'),
                 });
               }
               const info = {
@@ -389,7 +389,7 @@ class netease {
             })
             // 请求失败：明确把失败交回 UI，而不是让页面一直转圈
             .catch(() =>
-              fn({ status: '0', reason: '网易云歌单加载失败，请稍后重试' })
+              fn({ status: '0', reason: i18next.t('_NETEASE_PLAYLIST_LOAD_FAILED') })
             );
         });
       },

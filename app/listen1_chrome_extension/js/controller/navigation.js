@@ -93,6 +93,9 @@ angular.module('listenone').controller('NavigationController', [
       }
       $scope.cover_img_url = 'images/loading.svg';
       $scope.playlist_title = '';
+      // 歌单标题原始信息：本地歌单（本地音乐 / 已下载）交给 `playlist_title`
+      // 过滤器按当前语言渲染，切换语言时无需重新拉取歌单即可刷新标题
+      $scope.current_playlist_info = null;
       $scope.playlist_source_url = '';
       $scope.songs = [];
       $scope.window_type = 'list';
@@ -129,7 +132,7 @@ angular.module('listenone').controller('NavigationController', [
       const listId = new URL(url, window.location).searchParams.get('list_id');
       MediaService.getPlaylist(listId).success((data) => {
         if (!data || data.status === '0' || !data.info) {
-          notyf.info((data && data.reason) || '歌单加载失败，请稍后重试');
+          notyf.info((data && data.reason) || i18next.t('_PLAYLIST_LOAD_FAILED'));
           return;
         }
         $scope.songs = data.tracks;
@@ -137,6 +140,7 @@ angular.module('listenone').controller('NavigationController', [
         $scope.list_id = data.info.id;
         $scope.cover_img_url = data.info.cover_img_url;
         $scope.playlist_title = data.info.title;
+        $scope.current_playlist_info = data.info;
         $scope.playlist_source_url = data.info.source_url;
         $scope.is_mine = data.info.id.slice(0, 2) === 'my';
         $scope.is_local = data.info.id.slice(0, 2) === 'lm';
@@ -223,7 +227,7 @@ angular.module('listenone').controller('NavigationController', [
       const listId = new URL(url, window.location).searchParams.get('list_id');
       MediaService.getPlaylist(listId, useCache).success((data) => {
         if (!data || data.status === '0' || !data.info) {
-          notyf.info((data && data.reason) || '歌单加载失败，请稍后重试');
+          notyf.info((data && data.reason) || i18next.t('_PLAYLIST_LOAD_FAILED'));
           $scope.popWindow();
           return;
         }
@@ -231,6 +235,7 @@ angular.module('listenone').controller('NavigationController', [
         applyPlayablePrecheck($scope.songs);
         $scope.cover_img_url = data.info.cover_img_url;
         $scope.playlist_title = data.info.title;
+        $scope.current_playlist_info = data.info;
         $scope.playlist_source_url = data.info.source_url;
         $scope.list_id = data.info.id;
         $scope.is_mine = data.info.id.slice(0, 2) === 'my';
@@ -250,7 +255,7 @@ angular.module('listenone').controller('NavigationController', [
     $scope.directplaylist = (list_id) => {
       MediaService.getPlaylist(list_id).success((data) => {
         if (!data || data.status === '0' || !Array.isArray(data.tracks)) {
-          notyf.info((data && data.reason) || '歌单加载失败，请稍后重试');
+          notyf.info((data && data.reason) || i18next.t('_PLAYLIST_LOAD_FAILED'));
           return;
         }
         $scope.songs = data.tracks;
@@ -367,7 +372,9 @@ angular.module('listenone').controller('NavigationController', [
       if ($scope.playlistSort.key !== key) {
         return name;
       }
-      return $scope.playlistSort.reverse ? `${name}降序` : `${name}升序`;
+      return $scope.playlistSort.reverse
+        ? `${name} ${i18next.t('_SORT_DESC')}`
+        : `${name} ${i18next.t('_SORT_ASC')}`;
     };
 
     const comparePlaylistSong = (a, b, key) =>
@@ -608,7 +615,7 @@ angular.module('listenone').controller('NavigationController', [
     $scope.importMySettings = (event) => {
       const fileObject = event.target.files[0];
       if (fileObject === null) {
-        notyf.warning('请选择备份文件');
+        notyf.warning(i18next.t('_BACKUP_SELECT_FILE'));
         return;
       }
       const reader = new FileReader();
@@ -622,7 +629,7 @@ angular.module('listenone').controller('NavigationController', [
         try {
           data = JSON.parse(data_json);
         } catch (e) {
-          notyf.warning('备份文件格式错误，请重新选择');
+          notyf.warning(i18next.t('_BACKUP_INVALID_FILE'));
           return;
         }
 
@@ -672,6 +679,12 @@ angular.module('listenone').controller('NavigationController', [
         $scope.webdavStatusText = i18next.t('_WEBDAV_DISCONNECTED');
       }
     };
+
+    // 状态文案在上面的函数里按当时的语言算好后缓存了下来，切语言不会自动重算，
+    // 所以订阅语言变更事件重新生成一次（未配置/未连接/已连接·上次同步时间）。
+    $rootScope.$on('language:changed', () => {
+      refreshWebdavStatus();
+    });
 
     const webdavPayloadHash = (payload) => {
       const json = JSON.stringify(payload);
@@ -980,7 +993,7 @@ angular.module('listenone').controller('NavigationController', [
         const remoteFunctions = remote.require('./functions.js');
         remote.dialog
           .showOpenDialog({
-            title: '添加歌曲',
+            title: i18next.t('_ADD_LOCAL_SONGS'),
             properties: ['openFile', 'multiSelections'],
             filters: [
               {
@@ -1019,6 +1032,7 @@ angular.module('listenone').controller('NavigationController', [
                   $scope.list_id = playlist.info.id;
                   $scope.cover_img_url = playlist.info.cover_img_url;
                   $scope.playlist_title = playlist.info.title;
+                  $scope.current_playlist_info = playlist.info;
                   $scope.playlist_source_url = playlist.info.source_url;
                   $scope.is_mine = playlist.info.id.slice(0, 2) === 'my';
                   $scope.is_local = playlist.info.id.slice(0, 2) === 'lm';

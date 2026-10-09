@@ -109,17 +109,42 @@ const main = () => {
 
   l1Player.injectDirectives(app);
 
-  app.filter('playmode_title', () => (input) => {
-    switch (input) {
-      case 0:
-        return '顺序';
-      case 1:
-        return '随机';
-      case 2:
-        return '单曲循环';
-      default:
+  app.filter('playmode_title', () => {
+    const playmodeTitleFilter = (input) => {
+      switch (input) {
+        case 0:
+          return i18next.t('_PLAYMODE_SEQUENCE');
+        case 1:
+          return i18next.t('_PLAYMODE_RANDOM');
+        case 2:
+          return i18next.t('_PLAYMODE_SINGLE');
+        default:
+          return '';
+      }
+    };
+    // 切换语言后需要重新求值，标记为 stateful，否则 Angular 会缓存上一次的结果
+    playmodeTitleFilter.$stateful = true;
+    return playmodeTitleFilter;
+  });
+
+  // 本地歌单（本地音乐 / 已下载）的标题按当前语言实时显示，
+  // 不把中文标题写死进 localStorage，避免同步到其它语言的设备上串味。
+  app.filter('playlist_title', () => {
+    const playlistTitleFilter = (info) => {
+      if (!info) {
         return '';
-    }
+      }
+      if (info.id === 'lmplaylist_reserve') {
+        return i18next.t('_LOCAL_MUSIC');
+      }
+      if (info.id === 'lmplaylist_downloaded') {
+        return i18next.t('_DOWNLOADED');
+      }
+      return info.title;
+    };
+    // 切换语言后需要重新求值
+    playlistTitleFilter.$stateful = true;
+    return playlistTitleFilter;
   });
 
   app.directive('customOnChange', () => {
@@ -160,9 +185,9 @@ const main = () => {
   app.directive('pagination', () => ({
     restrict: 'EA',
     replace: false,
-    template: ` <button class="btn btn-sm btn-pagination" ng-click="previousPage()" ng-disabled="curpage==1"> 上一页</button>
-    <label> {{curpage}}/{{totalpage}} 页 </label>
-    <button class="btn btn-sm btn-pagination" ng-click="nextPage()" ng-disabled="curpage==totalpage"> 下一页</button>`,
+    template: ` <button class="btn btn-sm btn-pagination" ng-click="previousPage()" ng-disabled="curpage==1"> {{_PREVIOUS_PAGE}}</button>
+    <label> {{curpage}}/{{totalpage}} </label>
+    <button class="btn btn-sm btn-pagination" ng-click="nextPage()" ng-disabled="curpage==totalpage"> {{_NEXT_PAGE}}</button>`,
   }));
 
   app.directive('errSrc', () => ({

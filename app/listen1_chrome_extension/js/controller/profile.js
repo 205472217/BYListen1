@@ -113,8 +113,16 @@ angular.module('listenone').controller('ProfileController', [
           $scope.proxyModes.forEach((item) => {
             item.displayText = t(item.displayId);
           });
+          // 通知依赖语言的其它控制器重新求值（例如 WebDAV 连接状态、当前播放来源），
+          // 否则那些已经缓存成字符串的文案会一直停留在切换前的语言。
+          $rootScope.$broadcast('language:changed', langKey);
         });
         localStorage.setObject('language', langKey);
+        // 主进程（托盘菜单、原生对话框、下载提示）也要跟着切语言
+        if (isElectron()) {
+          const { ipcRenderer } = require('electron');
+          ipcRenderer.send('setLanguage', langKey);
+        }
       });
     };
     $scope.setLang(defaultLang);

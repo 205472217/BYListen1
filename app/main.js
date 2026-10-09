@@ -21,6 +21,7 @@ const {
   appendFileSync,
   createWriteStream,
   writeFileSync,
+  readFileSync,
   unlink,
   rename,
   stat,
@@ -58,7 +59,7 @@ ipcMain.handle("showLyricContextMenu", (event) =>
     let selected = false;
     const contextMenu = Menu.buildFromTemplate([
       {
-        label: "此位置同步当前进度",
+        label: t("_SEEK_TO_HERE"),
         click() {
           selected = true;
           resolve(true);
@@ -78,6 +79,83 @@ ipcMain.handle("showLyricContextMenu", (event) =>
 
 const store = new Store();
 const iconPath = join(__dirname, "/listen1_chrome_extension/images/logo.png");
+
+// ---------------------------------------------------------------------------
+// 主进程多语言：托盘菜单、原生对话框、下载提示等系统级文案。
+// 文案表与前端共用 `listen1_chrome_extension/i18n/*.json`；
+// 渲染进程在切换语言时通过 `setLanguage` IPC 通知这里。
+// ---------------------------------------------------------------------------
+const I18N_DIR = join(__dirname, "listen1_chrome_extension", "i18n");
+const SUPPORTED_LANGUAGES = ["zh-CN", "zh-TC", "en-US", "fr-FR", "ko-KR", "pt-BR"];
+const localeCache = new Map();
+let currentLanguage = null;
+// 托盘菜单里的「正在播放」信息，重建菜单（切换语言）时需要复用
+let trayTrack = null;
+
+function getLanguage() {
+  if (currentLanguage === null) {
+    let stored = null;
+    try {
+      stored = store.get("language");
+    } catch (error) {
+      stored = null;
+    }
+    currentLanguage =
+      SUPPORTED_LANGUAGES.indexOf(stored) !== -1 ? stored : "zh-CN";
+  }
+  return currentLanguage;
+}
+
+function loadLocale(lang) {
+  if (localeCache.has(lang)) {
+    return localeCache.get(lang);
+  }
+  let dict = {};
+  try {
+    // 语言包可能是带 BOM 的 UTF-8（zh-TC.json），JSON.parse 前必须先去掉 BOM
+    const raw = readFileSync(join(I18N_DIR, `${lang}.json`), "utf8").replace(
+      /^\uFEFF/,
+      ""
+    );
+    dict = JSON.parse(raw);
+  } catch (error) {
+    dict = {};
+  }
+  localeCache.set(lang, dict);
+  return dict;
+}
+
+/** 取当前语言下的文案；缺失时依次回退到 zh-CN、en-US，最后返回 key 本身。 */
+function t(key) {
+  const candidates = [getLanguage(), "zh-CN", "en-US"];
+  for (const lang of candidates) {
+    const value = loadLocale(lang)[key];
+    if (typeof value === "string") {
+      return value;
+    }
+  }
+  return key;
+}
+
+ipcMain.on("setLanguage", (event, lang) => {
+  if (SUPPORTED_LANGUAGES.indexOf(lang) === -1) {
+    return;
+  }
+  if (lang === getLanguage()) {
+    return;
+  }
+  currentLanguage = lang;
+  try {
+    store.set("language", lang);
+  } catch (error) {
+    /* 语言持久化失败不影响本次运行 */
+  }
+  // 托盘菜单文案需要重建
+  if (mainWindow && !mainWindow.isDestroyed()) {
+    initialTray(mainWindow, trayTrack);
+  }
+});
+
 const mediaRequestHeaders = new Map();
 
 function normalizeRequestHeaders(headers) {
@@ -486,7 +564,9 @@ function downloadMedia(event, track, temporaryPath) {
     request.on("response", (response) => {
       if (response.statusCode < 200 || response.statusCode >= 300) {
         response.resume();
-        rejectPromise(new Error(`媒体请求失败: HTTP ${response.statusCode}`));
+        rejectPromise(
+          new Error(`${t("_MEDIA_REQUEST_FAILED")}: HTTP ${response.statusCode}`)
+        );
         return;
       }
       const lengthHeader = response.headers["content-length"];
@@ -543,7 +623,10 @@ function transcodeToMp3(inputPath, outputPath, track) {
     ffmpeg.on("error", rejectPromise);
     ffmpeg.on("close", (code) => {
       if (code === 0) resolvePromise();
-      else rejectPromise(new Error(errorOutput.trim() || `FFmpeg 退出码: ${code}`));
+      else
+        rejectPromise(
+          new Error(errorOutput.trim() || `${t("_FFMPEG_EXIT_CODE")}: ${code}`)
+        );
     });
   });
 }
@@ -746,7 +829,7 @@ ipcMain.handle("getDownloadPath", () => ensureDirectory(getDownloadPath()));
 
 ipcMain.handle("chooseDownloadPath", async () => {
   const result = await electron.dialog.showOpenDialog({
-    title: "选择下载目录",
+    title: t("_CHOOSE_DOWNLOAD_DIR"),
     defaultPath: getDownloadPath(),
     properties: ["openDirectory", "createDirectory"],
   });
@@ -759,19 +842,19 @@ ipcMain.handle("chooseDownloadPath", async () => {
 
 ipcMain.handle("downloadMusic", async (event, track) => {
   if (!track || typeof track.url !== "string") {
-    return { success: false, error: "当前歌曲还没有可用的音频地址" };
+    return { success: false, error: t("_NO_AUDIO_URL") };
   }
   let mediaUrl;
   try {
     mediaUrl = new URL(track.url);
   } catch (error) {
-    return { success: false, error: "音频地址无效" };
+    return { success: false, error: t("_INVALID_AUDIO_URL") };
   }
   if (!["http:", "https:"].includes(mediaUrl.protocol)) {
-    return { success: false, error: "只支持下载在线音乐" };
+    return { success: false, error: t("_ONLINE_ONLY_DOWNLOAD") };
   }
   const directory = ensureDirectory(getDownloadPath());
-  const title = sanitizeFileName(track.title) || "未命名歌曲";
+  const title = sanitizeFileName(track.title) || t("_UNTITLED_SONG");
   const artist = sanitizeFileName(track.artist);
   const target = await resolveDownloadTarget(directory, title, artist);
   if (target.exists) {
@@ -810,9 +893,9 @@ ipcMain.handle("downloadMusic", async (event, track) => {
       fileUrl: pathToFileURL(outputPath).href,
     };
   } catch (error) {
-    const rawMessage = (error && error.message) || "下载失败";
+    const rawMessage = (error && error.message) || t("_DOWNLOAD_FAILED");
     const message = /ERR_BLOCKED_BY_CLIENT/.test(rawMessage)
-      ? "下载被客户端/系统网络栈拦截（ERR_BLOCKED_BY_CLIENT），且这首歌没有可用的播放缓存"
+      ? t("_DOWNLOAD_BLOCKED")
       : rawMessage;
     writeLog(
       "DOWNLOAD",
@@ -884,12 +967,12 @@ const globalShortcutMapping = {
  */
 function initialTray(mainWindow, track) {
   track ||= {
-    title: "暂无歌曲",
+    title: t("_NO_TRACK"),
     artist: "  ",
   };
 
   let nowPlayingTitle = `${track.title}`;
-  let nowPlayingArtist = `歌手: ${track.artist}`;
+  let nowPlayingArtist = `${t("_NOW_PLAYING_ARTIST_PREFIX")} ${track.artist}`;
 
   function toggleVisiable() {
     mainWindow.isVisible() ? mainWindow.hide() : mainWindow.show();
@@ -909,31 +992,31 @@ function initialTray(mainWindow, track) {
     },
     { type: "separator" },
     {
-      label: "播放/暂停",
+      label: t("_PLAY_OR_PAUSE"),
       click() {
         mainWindow.webContents.send("globalShortcut", "space");
       },
     },
     {
-      label: "上一首",
+      label: t("_PREVIOUS_TRACK"),
       click() {
         mainWindow.webContents.send("globalShortcut", "left");
       },
     },
     {
-      label: "下一首",
+      label: t("_NEXT_TRACK"),
       click() {
         mainWindow.webContents.send("globalShortcut", "right");
       },
     },
     {
-      label: "显示/隐藏窗口",
+      label: t("_SHOW_HIDE_WINDOW"),
       click() {
         toggleVisiable();
       },
     },
     {
-      label: "退出",
+      label: t("_QUIT_APPLICATION"),
       click() {
         app.quit();
       },
@@ -1410,6 +1493,7 @@ ipcMain.on("currentLyric", (event, arg) => {
 });
 
 ipcMain.on("trackPlayingNow", (event, track) => {
+  trayTrack = track;
   if (mainWindow != null) {
     initialTray(mainWindow, track);
   }

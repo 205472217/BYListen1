@@ -118,7 +118,7 @@
                           ng-click="chooseDialogOption(playlist.info.id)"
                         >
                           <img ng-src="{{ playlist.info.cover_img_url }}" />
-                          <h2>{{ playlist.info.title }}</h2>
+                          <h2>{{ playlist.info | playlist_title }}</h2>
                         </li>
                       </ul>
                       <!-- create new playlist dialog-->
@@ -215,7 +215,7 @@
                           ng-click="mergePlaylist(playlist.info.id)"
                         >
                           <img ng-src="{{ playlist.info.cover_img_url }}" />
-                          <h2>{{ playlist.info.title }}</h2>
+                          <h2>{{ playlist.info | playlist_title }}</h2>
                         </li>
                       </ul>
                       <div class="dialog-open-login" ng-show="dialog_type==11">
@@ -318,7 +318,7 @@
                           >
                             <div class="sidebar-block">
                               <span class="icon li-featured-list"></span
-                              ><a>已下载</a>
+                              ><a>{{_DOWNLOADED}}</a>
                             </div>
                           </li>
                           <li
@@ -491,7 +491,7 @@
                               ng-show="playlistFilters[tab] && playlistFilters[tab].length > 0"
                               ng-click="toggleMorePlaylists()"
                             >
-                              更多...
+                              {{_MORE}}
                             </div>
                           </div>
                           <div class="all-playlist-filter" ng-show="showMore">
@@ -671,7 +671,7 @@
                                       ng-class="{'active':isSearchType(0)}"
                                       ng-click="changeSearchType(0)"
                                     >
-                                      <a>单曲</a>
+                                      <a>{{_SEARCH_TYPE_SONGS}}</a>
                                     </li>
                                     <div class="splitter"></div>
                                     <li
@@ -679,7 +679,7 @@
                                       ng-class="{'active':isSearchType(1)}"
                                       ng-click="changeSearchType(1)"
                                     >
-                                      <a>歌单</a>
+                                      <a>{{_SEARCH_TYPE_PLAYLISTS}}</a>
                                     </li>
                                   </div>
                                 </ul>
@@ -855,12 +855,12 @@
                                 </div>
                               </div>
                               <div class="settings-title">
-                                <span>下载路径</span>
+                                <span>{{_DOWNLOAD_PATH}}</span>
                               </div>
                               <div class="settings-content">
                                 <div class="shortcut shortcut-download">
-                                  <span>{{downloadPath || '加载中…'}}</span>
-                                  <button class="language-button" ng-click="chooseDownloadPath()">选择目录</button>
+                                  <span>{{downloadPath || _LOADING}}</span>
+                                  <button class="language-button" ng-click="chooseDownloadPath()">{{_CHOOSE_FOLDER}}</button>
                                 </div>
                               </div>
                               <div class="settings-title">
@@ -1505,7 +1505,7 @@
                                 />
                               </div>
                               <div class="detail-head-title">
-                                <h2>{{ playlist_title }}</h2>
+                                <h2>{{ current_playlist_info | playlist_title }}</h2>
                                 <div class="playlist-button-list">
                                   <div class="playlist-button playadd-button">
                                     <div
@@ -1614,15 +1614,15 @@
                                   class="playlist-sort-button"
                                   ng-class="{ active: playlistSort.key === 'title' }"
                                   ng-click="sortBy('title')"
-                                  title="按名称排序"
-                                  >{{ sortLabel('title', '按名称') }}</button
+                                  title="{{_SORT_BY_TITLE_TITLE}}"
+                                  >{{ sortLabel('title', _SORT_BY_TITLE) }}</button
                                 ><button
                                   type="button"
                                   class="playlist-sort-button"
                                   ng-class="{ active: playlistSort.key === 'artist' }"
                                   ng-click="sortBy('artist')"
-                                  title="按歌手名排序"
-                                  >{{ sortLabel('artist', '按歌手') }}</button
+                                  title="{{_SORT_BY_ARTIST_TITLE}}"
+                                  >{{ sortLabel('artist', _SORT_BY_ARTIST) }}</button
                                 >
                               </div>
                               <div class="playlist-search">
@@ -1732,7 +1732,7 @@
                               ng-click="toggleLyricTranslation()"
                               ng-class="{selected: enableLyricTranslation}"
                             >
-                              译
+                              {{_LYRIC_TRANSLATION_SHORT}}
                             </div>
                             <div
                               class="close"
@@ -1807,17 +1807,17 @@
                                   ng-if="!isChrome && currentPlaying.source !== 'localmusic' && currentPlaying.platform !== 'localmusic'"
                                   ng-click="downloadCurrentTrack()"
                                   ng-disabled="downloadState === 'resolving' || downloadState === 'downloading'"
-                                  title="下载当前歌曲为 MP3"
-                                ><span ng-if="downloadState === 'idle' || downloadState === 'success' || downloadState === 'error'">下载 MP3</span><span ng-if="downloadState === 'resolving'">获取地址中…</span><span ng-if="downloadState === 'downloading'">下载中 {{downloadProgress}}%</span></button>
+                                  title="{{_DOWNLOAD_CURRENT_AS_MP3}}"
+                                ><span ng-if="downloadState === 'idle' || downloadState === 'success' || downloadState === 'error'">{{_DOWNLOAD_MP3}}</span><span ng-if="downloadState === 'resolving'">{{_RESOLVING_URL}}</span><span ng-if="downloadState === 'downloading'">{{_DOWNLOADING}} {{downloadProgress}}%</span></button>
                                 <div class="local-lyric-sources" ng-if="currentPlaying.source === 'localmusic' || currentPlaying.platform === 'localmusic'">
                                   <button
                                     type="button"
                                     class="lyric-time-adjust"
-                                    title="歌词时间增加 0.5 秒"
+                                    title="{{_LYRIC_TIME_INCREASE}}"
                                     ng-click="adjustLyricTime(500)"
                                     ng-disabled="!canAdjustLyricTime()"
                                   >
-                                    +0.5 秒
+                                    {{_LYRIC_TIME_PLUS}}
                                   </button>
                                   <label
                                     ng-repeat="source in lyricSources track by source.index"
@@ -1831,16 +1831,16 @@
                                       ng-change="changeLyricSource(source)"
                                     />
                                     <span>{{ source.name }}</span>
-                                    <small ng-if="lyricSourceLoadingIndex === source.index">搜索中</small>
+                                    <small ng-if="lyricSourceLoadingIndex === source.index">{{_SEARCHING}}</small>
                                   </label>
                                   <button
                                     type="button"
                                     class="lyric-time-adjust"
-                                    title="歌词时间减少 0.5 秒"
+                                    title="{{_LYRIC_TIME_DECREASE}}"
                                     ng-click="adjustLyricTime(-500)"
                                     ng-disabled="!canAdjustLyricTime()"
                                   >
-                                    -0.5 秒
+                                    {{_LYRIC_TIME_MINUS}}
                                   </button>
                                 </div>
                                 <div class="lyric">
@@ -2010,7 +2010,7 @@
                           class="lyric-icon"
                           ng-class="{'selected': enableLyricFloatingWindow}"
                         >
-                          词
+                          {{_LYRIC_FLOATING_SHORT}}
                         </div>
                       </div>
                     </div>
@@ -2156,7 +2156,7 @@
                         ng-click="chooseDialogOption(playlist.info.id)"
                       >
                         <img err-src="https://y.gtimg.cn/mediastyle/global/img/playlist_300.png" ng-src="{{ playlist.info.cover_img_url }}" />
-                        <h2>{{ playlist.info.title }}</h2>
+                        <h2>{{ playlist.info | playlist_title }}</h2>
                       </li>
                     </ul>
                     <!-- create new playlist dialog-->
@@ -2253,7 +2253,7 @@
                         ng-click="mergePlaylist(playlist.info.id)"
                       >
                         <img err-src="https://y.gtimg.cn/mediastyle/global/img/playlist_300.png" ng-src="{{ playlist.info.cover_img_url }}" />
-                        <h2>{{ playlist.info.title }}</h2>
+                        <h2>{{ playlist.info | playlist_title }}</h2>
                       </li>
                     </ul>
                     <div class="dialog-open-login" ng-show="dialog_type==11">
@@ -2374,7 +2374,7 @@
                         >
                           <div ng-class="{'opensidebar':isOpenSidebar}" class="sidebar-block">
                             <span class="icon li-featured-list"></span>
-                            <a>已下载</a>
+                            <a>{{_DOWNLOADED}}</a>
                           </div>
                         </li>
                         <li
@@ -2743,7 +2743,7 @@
                                     ng-click="changeSearchType(0)"
                                   >
                                   <div class="buttontext">
-                                    <a>单曲</a>
+                                    <a>{{_SEARCH_TYPE_SONGS}}</a>
                                   </div>
                                   </li>
                                   <div class="splitter"></div>
@@ -2753,7 +2753,7 @@
                                     ng-click="changeSearchType(1)"
                                   >
                                   <div class="buttontext">
-                                    <a>歌单</a>
+                                    <a>{{_SEARCH_TYPE_PLAYLISTS}}</a>
                                   </div>
                                   </li>
                                 </div>
@@ -2763,7 +2763,7 @@
                               margin-bottom: 28px;
                               margin-left: 26px;
                               margin-right: 26px;
-                          "><span style="opacity: .58;user-select: none;">搜索 <span ng-show="isSearchType(0)">歌曲</span><span ng-show="isSearchType(1)">歌单</span> </span>"{{keywords}}"</h1>
+                          "><span style="opacity: .58;user-select: none;">{{_SEARCH_PLACEHOLDER}} <span ng-show="isSearchType(0)">{{_SEARCH_TYPE_SONGS}}</span><span ng-show="isSearchType(1)">{{_SEARCH_TYPE_PLAYLISTS}}</span> </span>"{{keywords}}"</h1>
                               <ul ng-class="{'isSearch':isSearchType(1),isSearchOne:isSearchType(0)}" class="detail-songlist">
                                 <!-- <li class="head" ng-if="searchType===0 ">
                                   <div class="title"><a>{{_SONGS}}</a></div>
@@ -2961,12 +2961,12 @@
                               </div>
                             </div>
                             <div class="settings-title">
-                              <span>下载路径</span>
+                              <span>{{_DOWNLOAD_PATH}}</span>
                             </div>
                             <div class="settings-content">
                               <div class="shortcut shortcut-download">
-                                <span>{{downloadPath || '加载中…'}}</span>
-                                <button class="language-button" ng-click="chooseDownloadPath()">选择目录</button>
+                                <span>{{downloadPath || _LOADING}}</span>
+                                <button class="language-button" ng-click="chooseDownloadPath()">{{_CHOOSE_FOLDER}}</button>
                               </div>
                             </div>
                             <div class="settings-title">
@@ -3572,9 +3572,9 @@
                                   <div class="usercard-nickname">
                                     {{musicAuth[source].nickname}}
                                   </div>
-                                  <div ng-if="source=='netease'" class="usercard-info">网易云音乐</div>
-                                  <div ng-if="source=='qq'" class="usercard-info">QQ音乐</div>
-                                  <div ng-if="source=='migu'" class="usercard-info">咪咕音乐</div>
+                                  <div ng-if="source=='netease'" class="usercard-info">{{_NETEASE_MUSIC}}</div>
+                                  <div ng-if="source=='qq'" class="usercard-info">{{_QQ_MUSIC}}</div>
+                                  <div ng-if="source=='migu'" class="usercard-info">{{_MIGU_MUSIC}}</div>
                                 </div>
                                 <button ng-click="logout(source)">
                                   {{_LOGOUT}}
@@ -3594,9 +3594,9 @@
                                   <div class="usercard-nickname">
                                     {{_NOT_LOGIN_NICKNAME}}
                                   </div>
-                                  <div ng-if="source=='netease'" class="usercard-info">网易云音乐</div>
-                                  <div ng-if="source=='qq'" class="usercard-info">QQ音乐</div>
-                                  <div ng-if="source=='migu'" class="usercard-info">咪咕音乐</div>
+                                  <div ng-if="source=='netease'" class="usercard-info">{{_NETEASE_MUSIC}}</div>
+                                  <div ng-if="source=='qq'" class="usercard-info">{{_QQ_MUSIC}}</div>
+                                  <div ng-if="source=='migu'" class="usercard-info">{{_MIGU_MUSIC}}</div>
                                 </div>
                               </div>
                             </div>
@@ -3628,7 +3628,7 @@
                           </div>
                             </div>
                             <div class="detail-head-title">
-                              <h2>{{ playlist_title }}</h2>
+                              <h2>{{ current_playlist_info | playlist_title }}</h2>
                               <div class="playlist-button-list">
                                 <div style="padding: 0;height: auto;background-color: var(--theme-color-hover);color: var(--theme-color);" class="playlist-button playadd-button">
                                   <div
@@ -3740,15 +3740,15 @@
                                 class="playlist-sort-button"
                                 ng-class="{ active: playlistSort.key === 'title' }"
                                 ng-click="sortBy('title')"
-                                title="按名称排序"
-                                >{{ sortLabel('title', '按名称') }}</button
+                                title="{{_SORT_BY_TITLE_TITLE}}"
+                                >{{ sortLabel('title', _SORT_BY_TITLE) }}</button
                               ><button
                                 type="button"
                                 class="playlist-sort-button"
                                 ng-class="{ active: playlistSort.key === 'artist' }"
                                 ng-click="sortBy('artist')"
-                                title="按歌手排序"
-                                >{{ sortLabel('artist', '按歌手') }}</button
+                                title="{{_SORT_BY_ARTIST_TITLE}}"
+                                >{{ sortLabel('artist', _SORT_BY_ARTIST) }}</button
                               >
                             </div>
                             <div class="playlist-search">
@@ -3960,17 +3960,17 @@
                         ng-if="!isChrome && currentPlaying.source !== 'localmusic' && currentPlaying.platform !== 'localmusic'"
                         ng-click="downloadCurrentTrack()"
                         ng-disabled="downloadState === 'resolving' || downloadState === 'downloading'"
-                        title="下载当前歌曲为 MP3"
-                      ><span ng-if="downloadState === 'idle' || downloadState === 'success' || downloadState === 'error'">下载 MP3</span><span ng-if="downloadState === 'resolving'">获取地址中…</span><span ng-if="downloadState === 'downloading'">下载中 {{downloadProgress}}%</span></button>
+                        title="{{_DOWNLOAD_CURRENT_AS_MP3}}"
+                      ><span ng-if="downloadState === 'idle' || downloadState === 'success' || downloadState === 'error'">{{_DOWNLOAD_MP3}}</span><span ng-if="downloadState === 'resolving'">{{_RESOLVING_URL}}</span><span ng-if="downloadState === 'downloading'">{{_DOWNLOADING}} {{downloadProgress}}%</span></button>
                       <div class="local-lyric-sources" ng-if="currentPlaying.source === 'localmusic' || currentPlaying.platform === 'localmusic'">
                         <button
                           type="button"
                           class="lyric-time-adjust"
-                          title="歌词时间增加 0.5 秒"
+                          title="{{_LYRIC_TIME_INCREASE}}"
                           ng-click="adjustLyricTime(500)"
                           ng-disabled="!canAdjustLyricTime()"
                         >
-                          +0.5 秒
+                          {{_LYRIC_TIME_PLUS}}
                         </button>
                         <label
                           ng-repeat="source in lyricSources track by source.index"
@@ -3984,16 +3984,16 @@
                             ng-change="changeLyricSource(source)"
                           />
                           <span>{{ source.name }}</span>
-                          <small ng-if="lyricSourceLoadingIndex === source.index">搜索中</small>
+                          <small ng-if="lyricSourceLoadingIndex === source.index">{{_SEARCHING}}</small>
                         </label>
                         <button
                           type="button"
                           class="lyric-time-adjust"
-                          title="歌词时间减少 0.5 秒"
+                          title="{{_LYRIC_TIME_DECREASE}}"
                           ng-click="adjustLyricTime(-500)"
                           ng-disabled="!canAdjustLyricTime()"
                         >
-                          -0.5 秒
+                          {{_LYRIC_TIME_MINUS}}
                         </button>
                       </div>
 

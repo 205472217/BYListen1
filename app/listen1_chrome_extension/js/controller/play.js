@@ -79,15 +79,15 @@ angular.module('listenone').controller('PlayController', [
 
     $scope.downloadCurrentTrack = () => {
       if (!isElectron()) {
-        notyf.error('下载功能仅支持桌面版');
+        notyf.error(i18next.t('_DOWNLOAD_DESKTOP_ONLY'));
         return;
       }
       if (!$scope.currentPlaying) {
-        notyf.error('请先播放一首在线歌曲');
+        notyf.error(i18next.t('_PLAY_ONLINE_FIRST'));
         return;
       }
       if ($scope.downloadState === 'downloading') {
-        notyf.info('下载任务正在进行中');
+        notyf.info(i18next.t('_DOWNLOAD_IN_PROGRESS'));
         return;
       }
       const { ipcRenderer } = require('electron');
@@ -102,14 +102,14 @@ angular.module('listenone').controller('PlayController', [
       $scope.downloadState = 'resolving';
       $scope.downloadProgress = 0;
       $scope.$evalAsync();
-      notyf.info('正在获取歌曲地址…', true);
+      notyf.info(i18next.t('_RESOLVING_URL'), true);
       let completed = false;
       const resolveTimer = setTimeout(() => {
         if (completed) return;
         completed = true;
         $scope.downloadState = 'error';
         $scope.$evalAsync();
-        notyf.error('获取歌曲地址超时，请稍后重试');
+        notyf.error(i18next.t('_RESOLVE_URL_TIMEOUT'));
       }, 20000);
       const failResolution = (message) => {
         if (completed) return;
@@ -125,7 +125,7 @@ angular.module('listenone').controller('PlayController', [
           (bootinfo) => {
             if (completed) return;
             if (!bootinfo || !bootinfo.url) {
-              failResolution('该歌曲没有可下载的音频地址');
+              failResolution(i18next.t('_NO_DOWNLOADABLE_URL'));
               return;
             }
             completed = true;
@@ -135,10 +135,10 @@ angular.module('listenone').controller('PlayController', [
             track.platform = bootinfo.platform || track.platform;
             startTrackDownload(track, ipcRenderer);
           },
-          () => failResolution('获取歌曲地址失败，请稍后重试')
+          () => failResolution(i18next.t('_RESOLVE_URL_FAILED'))
         );
       } catch (error) {
-        failResolution(error.message || '获取歌曲地址失败');
+        failResolution(error.message || i18next.t('_RESOLVE_URL_ERROR'));
       }
     };
 
@@ -146,11 +146,11 @@ angular.module('listenone').controller('PlayController', [
       $scope.downloadState = 'downloading';
       $scope.downloadProgress = 0;
       $scope.$evalAsync();
-      notyf.info('正在下载并转换为 MP3，请稍候', true);
+      notyf.info(i18next.t('_DOWNLOAD_CONVERTING'), true);
       ipcRenderer.invoke('downloadMusic', track).then((result) => {
         if (!result || !result.success) {
           $scope.downloadState = 'error';
-          notyf.error((result && result.error) || '下载失败');
+          notyf.error((result && result.error) || i18next.t('_DOWNLOAD_FAILED'));
           return;
         }
         $scope.downloadState = 'success';
@@ -168,7 +168,7 @@ angular.module('listenone').controller('PlayController', [
           tracks: [],
           info: {
             id: 'lmplaylist_downloaded',
-            title: '已下载',
+            title: i18next.t('_DOWNLOADED'),
             cover_img_url: 'images/mycover.jpg',
             source_url: '',
           },
@@ -180,15 +180,15 @@ angular.module('listenone').controller('PlayController', [
         localStorage.setObject('lmplaylist_downloaded', playlist);
         notyf.success(
           result.cached
-            ? '歌曲已在已下载列表中'
+            ? i18next.t('_DOWNLOAD_ALREADY_EXISTS')
             : result.fromMediaCache
-            ? '下载成功（使用了播放缓存）'
-            : '下载成功'
+            ? i18next.t('_DOWNLOAD_SUCCESS_CACHE')
+            : i18next.t('_DOWNLOAD_SUCCESS')
         );
         $rootScope.$broadcast('downloaded:update');
       }).catch((error) => {
         $scope.downloadState = 'error';
-        notyf.error(error.message || '下载失败');
+        notyf.error(error.message || i18next.t('_DOWNLOAD_FAILED'));
       }).finally(() => {
         $scope.$evalAsync();
       });
@@ -386,6 +386,16 @@ angular.module('listenone').controller('PlayController', [
         return;
       }
       $scope.loadLocalSettings();
+    });
+
+    // 来源名（网易云音乐/QQ音乐…）是随歌曲一起缓存在 currentPlaying 上的字符串，
+    // 切语言后不会自动重算，这里补一次。
+    $rootScope.$on('language:changed', () => {
+      if ($scope.currentPlaying && $scope.currentPlaying.platform) {
+        $scope.currentPlaying.platformText = i18next.t(
+          $scope.currentPlaying.platform
+        );
+      }
     });
 
     // electron global shortcuts

@@ -1851,6 +1851,26 @@ svg.searchspinner {
   padding: 10px;
 }
 
+.dialog-sync-choice {
+  box-sizing: border-box;
+  display: flex;
+  flex-direction: column;
+  min-height: 100%;
+  padding: 10px 0 40px;
+  text-align: center;
+}
+.dialog-sync-choice .sync-choice-message {
+  margin: 10px 0;
+  font-size: 15px;
+  line-height: 24px;
+  white-space: pre-line;
+  text-align: left;
+}
+.dialog-body .dialog-sync-choice .buttons {
+  margin-top: auto;
+  padding-top: 20px;
+}
+
 .dialog-newbackup {
   text-align: center;
 }

@@ -508,6 +508,133 @@ const myplaylistFactory = () => {
     return stats;
   };
 
+  // 方向性差异：分别列出「远端独有」与「本机独有 / 本机更新」的歌单。
+  // 上传前用它判断云端是否多于本地；下载前用它判断覆盖会不会丢掉本机数据。
+  const diff_sync_playlists = (remote) => {
+    const result = { remote_only: [], local_only: [], local_newer: [] };
+    if (!remote || typeof remote !== 'object' || !remote.items) {
+      return result;
+    }
+    const incoming = filterIncoming(remote.items);
+    const localItems = collectSyncItems();
+    const collectIds = (items) => {
+      const ids = {};
+      SYNC_INDEX_KEYS.forEach((key) => {
+        const list = items[key];
+        if (Array.isArray(list)) {
+          list.forEach((id) => {
+            ids[id] = true;
+          });
+        }
+      });
+      return ids;
+    };
+    const localIds = collectIds(localItems);
+    const remoteIds = collectIds(incoming);
+    Object.keys(remoteIds).forEach((id) => {
+      if (!localIds[id]) {
+        result.remote_only.push(id);
+      }
+    });
+    Object.keys(localIds).forEach((id) => {
+      if (!remoteIds[id]) {
+        result.local_only.push(id);
+      } else if (
+        playlistTimestamp(localItems[id]) > playlistTimestamp(incoming[id])
+      ) {
+        result.local_newer.push(id);
+      }
+    });
+    return result;
+  };
+
+  // 下载方向「覆盖」：本机完全以云端为准。
+  // 与 merge_sync_payload 的差别——索引不取并集、歌单对象不比较时间戳，
+  // 本机独有的歌单会被删除，让「从云端同步」真正覆盖本机。
+  const overwrite_sync_payload = (remote) => {
+    const stats = {
+      added: 0,
+      updated: 0,
+      kept: 0,
+      playlist_changed: false,
+      changed_settings: [],
+    };
+    if (!remote || typeof remote !== 'object' || !remote.items) {
+      return stats;
+    }
+    const incoming = filterIncoming(remote.items);
+    const localItems = collectSyncItems();
+
+    const remotePlaylistIds = {};
+    SYNC_INDEX_KEYS.forEach((key) => {
+      const list = incoming[key];
+      if (Array.isArray(list)) {
+        list.forEach((id) => {
+          remotePlaylistIds[id] = true;
+        });
+      }
+    });
+
+    muteLocalStorageChange(() => {
+      // 本机独有、云端没有的歌单对象直接删除，避免「云端覆盖本地」后残留
+      Object.keys(localItems).forEach((key) => {
+        if (isPlaylistObject(localItems[key]) && !remotePlaylistIds[key]) {
+          localStorage.removeItem(key);
+          stats.playlist_changed = true;
+        }
+      });
+
+      Object.keys(incoming).forEach((key) => {
+        const remoteValue = incoming[key];
+        const localValue = Object.prototype.hasOwnProperty.call(
+          localItems,
+          key
+        )
+          ? localItems[key]
+          : undefined;
+        const same =
+          JSON.stringify(localValue) === JSON.stringify(remoteValue);
+
+        // 索引数组：直接用云端索引，不取并集
+        if (SYNC_INDEX_KEYS.indexOf(key) !== -1) {
+          if (!same) {
+            localStorage.setObject(key, remoteValue);
+            stats.updated += 1;
+            if (Array.isArray(remoteValue) && remoteValue.length > 0) {
+              stats.playlist_changed = true;
+            }
+          } else {
+            stats.kept += 1;
+          }
+          return;
+        }
+
+        // 歌单对象：以云端为准
+        if (isPlaylistObject(remoteValue)) {
+          if (!same) {
+            localStorage.setObject(key, remoteValue);
+            stats.updated += 1;
+            stats.playlist_changed = true;
+          } else {
+            stats.kept += 1;
+          }
+          return;
+        }
+
+        // 设置项：云端覆盖本机
+        if (!same) {
+          localStorage.setObject(key, remoteValue);
+          stats.updated += 1;
+          stats.changed_settings.push(key);
+        } else {
+          stats.kept += 1;
+        }
+      });
+    });
+
+    return stats;
+  };
+
   return {
     show_myplaylist,
     save_myplaylist,
@@ -522,6 +649,8 @@ const myplaylistFactory = () => {
     insert_myplaylist_to_myplaylists,
     export_sync_payload,
     merge_sync_payload,
+    overwrite_sync_payload,
+    diff_sync_playlists,
     is_syncable_key,
   };
 };

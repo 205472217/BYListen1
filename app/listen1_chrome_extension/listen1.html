@@ -218,6 +218,26 @@
                           <h2>{{ playlist.info | playlist_title }}</h2>
                         </li>
                       </ul>
+                      <div class="dialog-sync-choice" ng-show="dialog_type==13">
+                        <p class="sync-choice-message">{{ syncChoiceMessage }}</p>
+                        <div class="buttons">
+                          <button
+                            class="btn btn-primary confirm-button"
+                            ng-click="chooseSyncMode('append')"
+                          >
+                            {{_WEBDAV_CHOICE_APPEND}}
+                          </button>
+                          <button
+                            class="btn btn-warning warning-button"
+                            ng-click="chooseSyncMode('overwrite')"
+                          >
+                            {{_WEBDAV_CHOICE_OVERWRITE}}
+                          </button>
+                          <button class="btn btn-default" ng-click="closeDialog()">
+                            {{_CANCEL}}
+                          </button>
+                        </div>
+                      </div>
                       <div class="dialog-open-login" ng-show="dialog_type==11">
                         <p>{{_LOGIN_DIALOG_NOTICE}}</p>
                         <div class="buttons">
@@ -2256,6 +2276,26 @@
                         <h2>{{ playlist.info | playlist_title }}</h2>
                       </li>
                     </ul>
+                    <div class="dialog-sync-choice" ng-show="dialog_type==13">
+                      <p class="sync-choice-message">{{ syncChoiceMessage }}</p>
+                      <div class="buttons">
+                        <button
+                          class="btn btn-primary confirm-button"
+                          ng-click="chooseSyncMode('append')"
+                        >
+                          {{_WEBDAV_CHOICE_APPEND}}
+                        </button>
+                        <button
+                          class="btn btn-warning warning-button"
+                          ng-click="chooseSyncMode('overwrite')"
+                        >
+                          {{_WEBDAV_CHOICE_OVERWRITE}}
+                        </button>
+                        <button class="btn btn-default" ng-click="closeDialog()">
+                          {{_CANCEL}}
+                        </button>
+                      </div>
+                    </div>
                     <div class="dialog-open-login" ng-show="dialog_type==11">
                       <p>{{_LOGIN_DIALOG_NOTICE}}</p>
                       <div class="buttons">

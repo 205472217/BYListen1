@@ -311,6 +311,28 @@ angular.module('listenone').controller('NavigationController', [
       if (dialog_type === 12) {
         $scope.dialog_title = i18next.t('_PROXY_CONFIG');
       }
+      if (dialog_type === 13) {
+        $scope.dialog_title = i18next.t('_WEBDAV_SYNC_CHOICE');
+      }
+    };
+
+    // 云同步「追加 / 覆盖」选择弹窗：把待决策的回调暂存到 scope 上，
+    // 由弹窗按钮 chooseSyncMode(mode) 触发；关闭弹窗（×/取消）则不执行任何同步。
+    $scope.syncChoiceMessage = '';
+    $scope.syncChoiceResolve = null;
+    $scope.openSyncChoice = (message, onResolve) => {
+      $scope.syncChoiceMessage = message;
+      $scope.syncChoiceResolve = onResolve;
+      $scope.showDialog(13, null);
+    };
+    $scope.chooseSyncMode = (mode) => {
+      const resolve = $scope.syncChoiceResolve;
+      $scope.syncChoiceResolve = null;
+      $scope.is_dialog_hidden = 1;
+      $scope.dialog_type = 0;
+      if (resolve) {
+        resolve(mode);
+      }
     };
 
     $scope.onSidebarPlaylistDrop = (
@@ -553,6 +575,8 @@ angular.module('listenone').controller('NavigationController', [
     $scope.closeDialog = () => {
       $scope.is_dialog_hidden = 1;
       $scope.dialog_type = 0;
+      // 关闭同步选择弹窗视为放弃本次同步
+      $scope.syncChoiceResolve = null;
     };
 
     $scope.setCurrentList = (list_id) => {
@@ -737,6 +761,10 @@ angular.module('listenone').controller('NavigationController', [
         if (!$scope.webdavConnected || webdavSyncing) {
           return;
         }
+        // 有弹窗（如同步冲突选择）时先不后台推送，等用户处理完再说
+        if ($scope.is_dialog_hidden === 0) {
+          return;
+        }
         $scope.webdavUpload(true);
       }, WEBDAV_PUSH_DELAY);
     };
@@ -831,6 +859,11 @@ angular.module('listenone').controller('NavigationController', [
       });
     };
 
+    // 同步到云端 = 本地覆盖云端。
+    // 先拉云端只是为了判断差异：云端有没有本地缺失的歌单。
+    //   - 没有差异：直接上传，用本机载荷覆盖云端（本地删除得以同步上去）。
+    //   - 云端多于本地：手动同步时弹窗让用户选「追加 / 覆盖」；自动同步默认「追加」，
+    //     避免在后台静默删掉云端独有的歌单。
     $scope.webdavUpload = (silent) => {
       if (webdavSyncing) {
         return;
@@ -842,11 +875,11 @@ angular.module('listenone').controller('NavigationController', [
         notyf.dismissAll();
         notyf.info(i18next.t('_WEBDAV_UPLOADING'));
       }
-      // 先拉云端并合并，避免覆盖另一台设备刚写入的数据。
-      // 上传方向：设置项以本机为准（刚改的主题/设置不能被云端旧值改回去）。
-      WebdavClient.pull((pullRes) => {
-        if (pullRes.ok && pullRes.found && pullRes.data) {
-          applyWebdavMergeResult(MediaService.mergeSyncPayload(pullRes.data));
+
+      const doUpload = (remote, mode) => {
+        // 追加：先把云端独有的歌单并入本机，再整体上传，保证两边都不丢数据
+        if (mode === 'append' && remote) {
+          applyWebdavMergeResult(MediaService.mergeSyncPayload(remote));
         }
         const payload = MediaService.exportSyncPayload();
         const hash = webdavPayloadHash(payload);
@@ -876,9 +909,47 @@ angular.module('listenone').controller('NavigationController', [
             }
           });
         });
+      };
+
+      WebdavClient.pull((pullRes) => {
+        const remote = pullRes.ok && pullRes.found ? pullRes.data : null;
+        const diff = remote
+          ? MediaService.diffSyncPlaylists(remote)
+          : { remote_only: [] };
+        if (diff.remote_only.length === 0) {
+          doUpload(remote, 'overwrite');
+          return;
+        }
+        if (silent) {
+          doUpload(remote, 'append');
+          return;
+        }
+        // 手动上传且云端多于本地：交给用户决定
+        webdavSyncing = false;
+        $scope.$evalAsync(() => {
+          $scope.webdavBusy = false;
+          refreshWebdavStatus();
+          notyf.dismissAll();
+          $scope.openSyncChoice(
+            i18next.t('_WEBDAV_UPLOAD_CONFLICT', {
+              num: diff.remote_only.length,
+            }),
+            (mode) => {
+              webdavSyncing = true;
+              $scope.webdavBusy = true;
+              refreshWebdavStatus();
+              notyf.info(i18next.t('_WEBDAV_UPLOADING'));
+              doUpload(remote, mode);
+            }
+          );
+        });
       });
     };
 
+    // 从云端同步 = 云端覆盖本地。
+    //   - 没有冲突：直接用云端替换本机（本机独有的歌单会被删除）。
+    //   - 有冲突（本机有云端没有的歌单、或共享歌单本机更新）：手动同步时弹窗
+    //     让用户选「追加 / 覆盖」；自动同步默认「追加」，避免误删本机数据。
     $scope.webdavDownload = (silent) => {
       if (webdavSyncing) {
         return;
@@ -890,21 +961,13 @@ angular.module('listenone').controller('NavigationController', [
         notyf.dismissAll();
         notyf.info(i18next.t('_WEBDAV_DOWNLOADING'));
       }
-      WebdavClient.pull((pullRes) => {
+
+      const finish = (ok, found) => {
         webdavSyncing = false;
-        let mergeResult = null;
-        if (pullRes.ok && pullRes.found && pullRes.data) {
-          // 下载方向：设置项以云端为准（换台设备要的就是云端那份设置）
-          mergeResult = MediaService.mergeSyncPayload(pullRes.data, {
-            preferRemote: true,
-          });
-          applyWebdavMergeResult(mergeResult);
-          webdavLastHash = webdavPayloadHash(MediaService.exportSyncPayload());
-        }
         $scope.$evalAsync(() => {
           $scope.webdavBusy = false;
-          $scope.webdavConnected = pullRes.ok;
-          if (pullRes.ok && pullRes.found) {
+          $scope.webdavConnected = ok;
+          if (ok && found) {
             $scope.webdavLastSyncAt = Date.now();
             WebdavClient.setLastSyncAt($scope.webdavLastSyncAt);
           }
@@ -913,13 +976,63 @@ angular.module('listenone').controller('NavigationController', [
             return;
           }
           notyf.dismissAll();
-          if (!pullRes.ok) {
+          if (!ok) {
             notyf.warning(i18next.t('_WEBDAV_DOWNLOAD_FAILED'));
-          } else if (!pullRes.found) {
+          } else if (!found) {
             notyf.warning(i18next.t('_WEBDAV_NO_BACKUP'));
           } else {
             notyf.success(i18next.t('_WEBDAV_DOWNLOAD_SUCCESS'));
           }
+        });
+      };
+
+      const doDownload = (remote, mode) => {
+        // 覆盖：本机以云端为准；追加：双向合并（设置项以云端为准）
+        const mergeResult =
+          mode === 'overwrite'
+            ? MediaService.overwriteSyncPayload(remote)
+            : MediaService.mergeSyncPayload(remote, { preferRemote: true });
+        applyWebdavMergeResult(mergeResult);
+        webdavLastHash = webdavPayloadHash(MediaService.exportSyncPayload());
+        finish(true, true);
+      };
+
+      WebdavClient.pull((pullRes) => {
+        if (!pullRes.ok) {
+          finish(false, false);
+          return;
+        }
+        if (!pullRes.found || !pullRes.data) {
+          finish(true, false);
+          return;
+        }
+        const remote = pullRes.data;
+        const diff = MediaService.diffSyncPlaylists(remote);
+        const conflictCount = diff.local_only.length + diff.local_newer.length;
+        if (conflictCount === 0) {
+          doDownload(remote, 'overwrite');
+          return;
+        }
+        if (silent) {
+          doDownload(remote, 'append');
+          return;
+        }
+        // 手动下载且存在冲突：交给用户决定
+        webdavSyncing = false;
+        $scope.$evalAsync(() => {
+          $scope.webdavBusy = false;
+          refreshWebdavStatus();
+          notyf.dismissAll();
+          $scope.openSyncChoice(
+            i18next.t('_WEBDAV_DOWNLOAD_CONFLICT', { num: conflictCount }),
+            (mode) => {
+              webdavSyncing = true;
+              $scope.webdavBusy = true;
+              refreshWebdavStatus();
+              notyf.info(i18next.t('_WEBDAV_DOWNLOADING'));
+              doDownload(remote, mode);
+            }
+          );
         });
       });
     };

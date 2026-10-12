@@ -247,6 +247,16 @@ const MediaService = {
     return myplaylist.merge_sync_payload(remote, options);
   },
 
+  // 下载方向「覆盖」：本机以云端为准（本机独有的歌单会被删除）
+  overwriteSyncPayload(remote) {
+    return myplaylist.overwrite_sync_payload(remote);
+  },
+
+  // 方向性差异：远端独有 / 本机独有 / 本机更新的歌单 id
+  diffSyncPlaylists(remote) {
+    return myplaylist.diff_sync_playlists(remote);
+  },
+
   // 某个 localStorage key 是否参与同步（界面层判断写入是否值得回推）
   isSyncableKey(key) {
     return myplaylist.is_syncable_key(key);

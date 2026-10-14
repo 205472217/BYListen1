@@ -383,6 +383,8 @@ https://stackoverflow.com/questions/19889615/can-an-angular-directive-pass-argum
   vertical-align: middle;
   padding: 0 13px;
   flex: 1;
+  display: flex;
+  align-items: center;
 }
 
 .navigation .search {
@@ -441,7 +443,7 @@ https://stackoverflow.com/questions/19889615/can-an-angular-directive-pass-argum
 }
 
 .navigation .backfront .icon {
-  display: inline-block;
+  display: inline-flex;
   vertical-align: middle;
 }
 
@@ -2162,11 +2164,12 @@ svg.searchspinner {
 }
 .footer .position-control .barbg .cur .btn,
 .footer .volume-control .barbg .cur .btn {
-  width: 2px;
-  height: 8px;
+  width: 10px;
+  height: 10px;
+  border-radius: 5px;
   position: absolute;
   right: -2px;
-  top: -5px;
+  top: -3px;
   transition: 0.3s;
   background: var(--footer-player-bar-cur-button-color);
 }
@@ -2310,11 +2313,12 @@ svg.searchspinner {
 }
 .footer .main-info .barbg .cur .btn {
   background: var(--footer-player-bar-cur-button-color);
-  height: 8px;
-  width: 2px;
+  height: 10px;
+  width: 10px;
+  border-radius: 5px;
   position: absolute;
   right: -2px;
-  top: -5px;
+  top: -3px;
   transition: 0.3s;
 }
 

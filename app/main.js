@@ -1220,6 +1220,16 @@ function createWindow() {
       mainWindow.maximize();
     }
     mainWindow.webContents.send("setZoomLevel", windowState.zoomLevel);
+    mainWindow.webContents.send("window-maximized", mainWindow.isMaximized());
+  });
+
+  mainWindow.on("maximize", () => {
+    windowState.maximized = true;
+    mainWindow.webContents.send("window-maximized", true);
+  });
+  mainWindow.on("unmaximize", () => {
+    windowState.maximized = false;
+    mainWindow.webContents.send("window-maximized", false);
   });
 
   mainWindow.on("resized", () => {
@@ -1257,7 +1267,13 @@ function createWindow() {
   // 让「播放缓存兜底」生效：页面加载完成后挂上 CDP 媒体监听。
   // 与 DevTools 互斥（同一个 target），所以开 F12 时先摘掉、关掉再挂回来。
   mainWindow.webContents.on("did-finish-load", () => {
-    if (mainWindow) attachMediaRecorder(mainWindow.webContents);
+    if (mainWindow) {
+      mainWindow.webContents.send(
+        "window-maximized",
+        mainWindow.isMaximized()
+      );
+      attachMediaRecorder(mainWindow.webContents);
+    }
   });
   mainWindow.webContents.on("devtools-opened", () => {
     try {
@@ -1526,8 +1542,9 @@ ipcMain.on("control", async (event, arg, params) => {
       break;
 
     case "window_max":
-      windowState.maximized ? mainWindow.unmaximize() : mainWindow.maximize();
-      windowState.maximized = !windowState.maximized;
+      // 最大化/还原状态由窗口的 maximize/unmaximize 事件统一维护，
+      // 这样双击标题栏、系统快捷键等其它方式改变状态时图标也能同步。
+      mainWindow.isMaximized() ? mainWindow.unmaximize() : mainWindow.maximize();
       break;
 
     case "window_close":

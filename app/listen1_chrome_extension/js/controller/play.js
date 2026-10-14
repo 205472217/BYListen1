@@ -56,6 +56,7 @@ angular.module('listenone').controller('PlayController', [
   '$rootScope',
   ($scope, $timeout, $log, $anchorScroll, $location, $rootScope) => {
     $scope.menuHidden = true;
+    $scope.isWindowMaximized = false;
     $scope.volume = l1Player.status.volume;
     $scope.mute = l1Player.status.muted;
     $scope.settings = {
@@ -453,6 +454,11 @@ angular.module('listenone').controller('PlayController', [
       // webFrame.setVisualZoomLevelLimits(1, 3);
       ipcRenderer.on('setZoomLevel', (event, level) => {
         webFrame.setZoomLevel(level);
+      });
+      ipcRenderer.on('window-maximized', (event, maximized) => {
+        $scope.$apply(() => {
+          $scope.isWindowMaximized = maximized;
+        });
       });
       ipcRenderer.on('lyricWindow', (event, arg) => {
         if (arg === 'float_window_close') {

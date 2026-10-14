@@ -55,6 +55,22 @@ angular.module('listenone').controller('NavigationController', [
       $scope.closeWindow();
     };
 
+    // 是否处于歌单详情页：导航栈顶为 /playlist?list_id=... 时即为歌单详情。
+    $scope.isPlaylistDetail = () => {
+      const url = $scope.getCurrentUrl();
+      return typeof url === 'string' && url.indexOf('/playlist') === 0;
+    };
+
+    // 歌单详情页时按钮为“返回”（回到上一页/还原滚动位置）；
+    // 其它页面按钮为“主页”，行为与点击精选歌单一致。
+    $scope.goHome = () => {
+      if ($scope.isPlaylistDetail()) {
+        $scope.popWindow();
+        return;
+      }
+      $scope.showTag(2);
+    };
+
     $scope.$on('search:keyword_change', (event, data) => {
       $scope.showTag(3);
     });

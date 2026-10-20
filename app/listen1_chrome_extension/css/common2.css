@@ -2395,6 +2395,14 @@ svg.searchspinner {
   border: 1px solid rgba(255, 255, 255, 0.08);
 }
 
+.footer .footer-main.slidedown ~ .menu-modal {
+  z-index: 145;
+}
+
+.footer .footer-main.slidedown ~ .menu {
+  z-index: 150;
+}
+
 .footer .menu .menu-header {
   height: 30px;
   display: flex;
